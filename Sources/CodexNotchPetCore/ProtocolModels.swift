@@ -158,6 +158,17 @@ public enum RateLimitMapper {
 
     public static func label(for window: UsageWindow, in bucket: UsageBucket) -> String {
         if window.isWeekly {
+            if let name = bucket.name?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !name.isEmpty {
+                return "\(name) · Weekly"
+            }
+            if let id = bucket.id?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !id.isEmpty {
+                let bucketLabel = id.localizedCaseInsensitiveCompare("codex") == .orderedSame
+                    ? "Codex"
+                    : id
+                return "\(bucketLabel) · Weekly"
+            }
             return "Weekly"
         }
         if let name = bucket.name?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {

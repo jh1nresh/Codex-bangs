@@ -315,25 +315,8 @@ final class NotchPanelController {
     }
 
     private func openTaskInCodex() {
-        guard let url = CodexDesktopHandoff.url(for: model.taskDraft) else { return }
-        let workspace = NSWorkspace.shared
-        guard let applicationURL = workspace.urlForApplication(toOpen: url),
-              CodexDesktopAppVerifier.isTrusted(applicationURL: applicationURL) else {
-            model.recordTaskHandoff(opened: false)
-            return
-        }
-
-        let configuration = NSWorkspace.OpenConfiguration()
-        configuration.activates = true
-        workspace.open(
-            [url],
-            withApplicationAt: applicationURL,
-            configuration: configuration
-        ) { [weak self] application, error in
-            let opened = application != nil && error == nil
-            Task { @MainActor [weak self] in
-                self?.model.recordTaskHandoff(opened: opened)
-            }
+        CodexDesktopLauncher.open(prompt: model.taskDraft) { [weak self] opened in
+            self?.model.recordTaskHandoff(opened: opened)
         }
     }
 }

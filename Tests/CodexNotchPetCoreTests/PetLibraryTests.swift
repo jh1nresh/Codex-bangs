@@ -119,6 +119,75 @@ final class PetLibraryTests: XCTestCase {
         XCTAssertEqual(PetLibrary.discover(in: root).map(\.id), ["real"])
     }
 
+    func testRejectsManifestOverEncodedByteLimitDuringLoadAndDiscovery() throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let package = try makePackage(id: "oversized-manifest", in: root)
+        let manifestURL = package.appendingPathComponent("pet.json")
+        var manifestData = try Data(contentsOf: manifestURL)
+        manifestData.append(
+            Data(
+                repeating: 0x20,
+                count: PetPackageInstaller.maximumManifestByteCount + 1 - manifestData.count
+            )
+        )
+        try manifestData.write(to: manifestURL)
+        try writePNG(
+            to: package.appendingPathComponent("spritesheet.png"),
+            width: PetV2Contract.atlasWidth,
+            height: PetV2Contract.atlasHeight
+        )
+
+        XCTAssertThrowsError(try PetLibrary.loadPackage(at: package, within: root)) { error in
+            XCTAssertEqual(error as? PetLibraryError, .invalidManifest)
+        }
+        XCTAssertTrue(PetLibrary.discover(in: root).isEmpty)
+    }
+
+    func testRejectsSpritesheetOverEncodedByteLimitDuringLoadAndDiscovery() throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let package = try makePackage(id: "oversized-atlas", in: root)
+        let spritesheetURL = package.appendingPathComponent("spritesheet.png")
+        try writePNG(
+            to: spritesheetURL,
+            width: PetV2Contract.atlasWidth,
+            height: PetV2Contract.atlasHeight
+        )
+        try resizeFile(
+            at: spritesheetURL,
+            to: PetPackageInstaller.maximumSpritesheetByteCount + 1
+        )
+
+        XCTAssertThrowsError(try PetLibrary.loadPackage(at: package, within: root)) { error in
+            XCTAssertEqual(error as? PetLibraryError, .undecodableSpritesheet)
+        }
+        XCTAssertTrue(PetLibrary.discover(in: root).isEmpty)
+    }
+
+    func testRejectsHugeAdvertisedDimensionsBeforeImageDecode() throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let package = try makePackage(id: "huge-atlas", in: root)
+        let spritesheetURL = package.appendingPathComponent("spritesheet.png")
+        try writeMonochromePNG(to: spritesheetURL, width: 8_192, height: 8_192)
+        XCTAssertLessThan(
+            try fileSize(at: spritesheetURL),
+            PetPackageInstaller.maximumSpritesheetByteCount
+        )
+
+        XCTAssertThrowsError(try PetLibrary.loadPackage(at: package, within: root)) { error in
+            XCTAssertEqual(
+                error as? PetLibraryError,
+                .invalidAtlasSize(width: 8_192, height: 8_192)
+            )
+        }
+        XCTAssertTrue(PetLibrary.discover(in: root).isEmpty)
+    }
+
     private func makeTemporaryDirectory() throws -> URL {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -173,5 +242,47 @@ final class PetLibraryTests: XCTestCase {
         )
         CGImageDestinationAddImage(destination, image, nil)
         XCTAssertTrue(CGImageDestinationFinalize(destination))
+    }
+
+    private func writeMonochromePNG(to url: URL, width: Int, height: Int) throws {
+        let bytesPerRow = (width + 7) / 8
+        let pixels = Data(repeating: 0, count: bytesPerRow * height)
+        let provider = try XCTUnwrap(CGDataProvider(data: pixels as CFData))
+        let image = try XCTUnwrap(
+            CGImage(
+                width: width,
+                height: height,
+                bitsPerComponent: 1,
+                bitsPerPixel: 1,
+                bytesPerRow: bytesPerRow,
+                space: CGColorSpaceCreateDeviceGray(),
+                bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.none.rawValue),
+                provider: provider,
+                decode: nil,
+                shouldInterpolate: false,
+                intent: .defaultIntent
+            )
+        )
+        let destination = try XCTUnwrap(
+            CGImageDestinationCreateWithURL(
+                url as CFURL,
+                UTType.png.identifier as CFString,
+                1,
+                nil
+            )
+        )
+        CGImageDestinationAddImage(destination, image, nil)
+        XCTAssertTrue(CGImageDestinationFinalize(destination))
+    }
+
+    private func fileSize(at url: URL) throws -> Int {
+        let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+        return try XCTUnwrap(attributes[.size] as? NSNumber).intValue
+    }
+
+    private func resizeFile(at url: URL, to byteCount: Int) throws {
+        let handle = try FileHandle(forWritingTo: url)
+        defer { try? handle.close() }
+        try handle.truncate(atOffset: UInt64(byteCount))
     }
 }

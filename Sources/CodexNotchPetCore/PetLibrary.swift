@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import ImageIO
 
@@ -73,14 +74,26 @@ public enum PetLibrary {
         }
 
         let manifestURL = directoryURL.appendingPathComponent("pet.json", isDirectory: false)
-        guard isRegularFile(manifestURL, fileManager: fileManager) else {
+        guard let manifestFile = openRegularFile(at: manifestURL) else {
             throw PetLibraryError.missingOrNonRegularManifest
+        }
+        defer { try? manifestFile.handle.close() }
+        guard manifestFile.byteCount <= PetPackageInstaller.maximumManifestByteCount else {
+            throw PetLibraryError.invalidManifest
         }
 
         let manifest: PetPackageManifest
         do {
-            let data = try Data(contentsOf: manifestURL, options: [.mappedIfSafe])
+            let data = try readContents(
+                from: manifestFile.handle,
+                maximumByteCount: PetPackageInstaller.maximumManifestByteCount
+            )
+            guard data.count <= PetPackageInstaller.maximumManifestByteCount else {
+                throw PetLibraryError.invalidManifest
+            }
             manifest = try JSONDecoder().decode(PetPackageManifest.self, from: data)
+        } catch let error as PetLibraryError {
+            throw error
         } catch {
             throw PetLibraryError.invalidManifest
         }
@@ -101,18 +114,60 @@ public enum PetLibrary {
             for: manifest.spritesheetPath,
             in: directoryURL
         )
-        guard isRegularFile(spritesheetURL, fileManager: fileManager) else {
+        guard let spritesheetFile = openRegularFile(at: spritesheetURL) else {
             throw PetLibraryError.missingOrNonRegularSpritesheet
         }
+        defer { try? spritesheetFile.handle.close() }
 
         let supportedExtensions = ["png", "webp"]
         guard supportedExtensions.contains(spritesheetURL.pathExtension.lowercased()) else {
             throw PetLibraryError.unsupportedSpritesheetFormat
         }
 
-        guard let source = CGImageSourceCreateWithURL(spritesheetURL as CFURL, nil),
+        guard spritesheetFile.byteCount <= PetPackageInstaller.maximumSpritesheetByteCount else {
+            throw PetLibraryError.undecodableSpritesheet
+        }
+
+        let spritesheetData: Data
+        do {
+            spritesheetData = try readContents(
+                from: spritesheetFile.handle,
+                maximumByteCount: PetPackageInstaller.maximumSpritesheetByteCount
+            )
+        } catch {
+            throw PetLibraryError.undecodableSpritesheet
+        }
+        guard spritesheetData.count <= PetPackageInstaller.maximumSpritesheetByteCount,
+              let source = CGImageSourceCreateWithData(spritesheetData as CFData, nil),
               CGImageSourceGetCount(source) > 0,
-              let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+              let properties = CGImageSourceCopyPropertiesAtIndex(
+                  source,
+                  0,
+                  [kCGImageSourceShouldCache: false] as CFDictionary
+              ) as? [CFString: Any],
+              let advertisedWidth = pixelDimension(
+                  kCGImagePropertyPixelWidth,
+                  in: properties
+              ),
+              let advertisedHeight = pixelDimension(
+                  kCGImagePropertyPixelHeight,
+                  in: properties
+              ) else {
+            throw PetLibraryError.undecodableSpritesheet
+        }
+        guard advertisedWidth == PetV2Contract.atlasWidth,
+              advertisedHeight == PetV2Contract.atlasHeight else {
+            throw PetLibraryError.invalidAtlasSize(
+                width: advertisedWidth,
+                height: advertisedHeight
+            )
+        }
+
+        guard let image = CGImageSourceCreateImageAtIndex(
+            source,
+            0,
+            [kCGImageSourceShouldCache: false] as CFDictionary
+        ) else {
             throw PetLibraryError.undecodableSpritesheet
         }
         guard image.width == PetV2Contract.atlasWidth,
@@ -166,16 +221,60 @@ public enum PetLibrary {
             && isDirectory.boolValue
     }
 
-    private static func isRegularFile(_ url: URL, fileManager: FileManager) -> Bool {
-        guard url.isFileURL,
-              !isSymbolicLink(url),
-              fileManager.fileExists(atPath: url.path) else {
-            return false
+    private static func openRegularFile(at url: URL) -> OpenedRegularFile? {
+        guard url.isFileURL else { return nil }
+
+        let descriptor = url.path.withCString { path in
+            Darwin.open(path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK)
         }
-        return (try? url.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true
+        guard descriptor >= 0 else { return nil }
+
+        var metadata = stat()
+        guard fstat(descriptor, &metadata) == 0,
+              metadata.st_mode & mode_t(S_IFMT) == mode_t(S_IFREG),
+              metadata.st_size >= 0,
+              metadata.st_size <= off_t(Int.max) else {
+            Darwin.close(descriptor)
+            return nil
+        }
+
+        return OpenedRegularFile(
+            handle: FileHandle(fileDescriptor: descriptor, closeOnDealloc: true),
+            byteCount: Int(metadata.st_size)
+        )
+    }
+
+    private static func readContents(
+        from handle: FileHandle,
+        maximumByteCount: Int
+    ) throws -> Data {
+        var data = Data()
+        while data.count <= maximumByteCount {
+            let readCount = min(64 * 1_024, maximumByteCount + 1 - data.count)
+            guard let chunk = try handle.read(upToCount: readCount),
+                  !chunk.isEmpty else {
+                break
+            }
+            data.append(chunk)
+        }
+        return data
+    }
+
+    private static func pixelDimension(
+        _ key: CFString,
+        in properties: [CFString: Any]
+    ) -> Int? {
+        guard let number = properties[key] as? NSNumber else { return nil }
+        let value = number.intValue
+        return value >= 0 ? value : nil
     }
 
     private static func isSymbolicLink(_ url: URL) -> Bool {
         (try? url.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) == true
+    }
+
+    private struct OpenedRegularFile {
+        let handle: FileHandle
+        let byteCount: Int
     }
 }

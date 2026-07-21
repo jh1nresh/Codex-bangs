@@ -27,6 +27,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panelController?.tearDown()
     }
 
+    func application(_ application: NSApplication, open urls: [URL]) {
+        let packageURLs = urls.filter {
+            $0.pathExtension.caseInsensitiveCompare("codexpet") == .orderedSame
+        }
+        guard !packageURLs.isEmpty else { return }
+
+        for packageURL in packageURLs {
+            model.importPetPackage(at: packageURL)
+        }
+        openSettings()
+    }
+
     private func configureStatusItem() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         item.button?.image = NSImage(

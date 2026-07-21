@@ -43,6 +43,32 @@ is explicit and visibly labeled:
   --preview --expanded
 ```
 
+## Install a release
+
+After a release passes every distribution gate, its notarized
+`Codex-bangs.dmg` appears on
+[GitHub Releases](https://github.com/jh1nresh/Codex-bangs/releases). Drag
+`Codex-bangs.app` into Applications, open it, then hover the camera housing.
+No public build is published until the workflow verifies its Developer ID
+signature, notarization ticket, stapling, DMG contents, and Gatekeeper checks.
+
+## Pets
+
+Every installation includes **Bloop**, an original built-in pet. To use a
+personal Codex v2 pet, open Settings and choose `Import .codexpet…`, drop a
+package onto the settings window or notch island, or double-click a `.codexpet`
+package in Finder. A valid package is installed locally under
+`~/.codex/pets/<pet-id>` and selected immediately.
+
+`Create My Pet…` includes the Apache-2.0 `$hatch-pet` runtime needed by a fresh
+download. If `~/.codex/skills/hatch-pet` is absent, the explicit
+`Install Skill & Continue in Codex` action installs the bundled skill before
+opening a bounded, reviewable request in the verified Codex desktop app. An
+existing file, directory, or symlink is never replaced. Codex-bangs never sends
+the prompt automatically; the user reviews and sends it in Codex.
+
+See [Custom pet packages](docs/pets.md) for the format and safety contract.
+
 ## Implemented app slice
 
 - real multi-bucket usage and reset times;
@@ -56,6 +82,8 @@ is explicit and visibly labeled:
 - a `Talk to pet` text composer that opens a reviewable prompt in Codex;
 - menu-bar Show/Hide, Refresh, Settings, and Quit controls;
 - strict local v2 pet discovery with atlas and path validation;
+- secure `.codexpet` import with symlink, traversal, conflict, and size checks;
+- an original built-in Bloop pet plus a reviewable `$hatch-pet` creation handoff;
 - Reduce Motion and accessibility labels;
 - `Live status unavailable` unless a shared-runtime capability is later proven.
 
