@@ -1,6 +1,6 @@
 import Foundation
 
-public enum PetAnimationState: String, Sendable {
+public enum PetAnimationState: String, Hashable, Sendable {
     case idle
     case runningRight = "running-right"
     case runningLeft = "running-left"
