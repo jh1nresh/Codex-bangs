@@ -1,0 +1,48 @@
+{
+  "data": [
+    {
+      "id": "idle-recent",
+      "name": "Most recent idle",
+      "preview": "private preview not asserted",
+      "cwd": "/Users/example/idle-project",
+      "ephemeral": false,
+      "recencyAt": 300,
+      "updatedAt": 300,
+      "status": { "type": "idle" }
+    },
+    {
+      "id": "active-working",
+      "name": null,
+      "preview": "Working preview",
+      "cwd": "/Users/example/working-project",
+      "ephemeral": false,
+      "recencyAt": 200,
+      "updatedAt": 200,
+      "status": { "type": "active", "activeFlags": [] }
+    },
+    {
+      "id": "active-approval",
+      "name": "Approval task",
+      "preview": "ignored",
+      "cwd": "/Users/example/approval-project",
+      "ephemeral": false,
+      "recencyAt": 250,
+      "updatedAt": 250,
+      "status": {
+        "type": "active",
+        "activeFlags": ["waitingOnUserInput", "waitingOnApproval"]
+      },
+      "unknownFutureField": 1
+    },
+    {
+      "id": "ephemeral-newest",
+      "name": "Do not select",
+      "ephemeral": true,
+      "recencyAt": 999,
+      "updatedAt": 999,
+      "status": { "type": "active", "activeFlags": [] }
+    }
+  ],
+  "nextCursor": null,
+  "unknownTopLevel": true
+}

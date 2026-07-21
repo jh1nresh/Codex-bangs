@@ -1,0 +1,13 @@
+{
+  "data": [
+    {
+      "id": "future-status",
+      "ephemeral": false,
+      "updatedAt": 10,
+      "status": {
+        "type": "futureBusyState",
+        "activeFlags": ["futureFlag"]
+      }
+    }
+  ]
+}

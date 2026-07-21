@@ -1,0 +1,6 @@
+{
+  "rateLimits": {
+    "limitId": "codex",
+    "limitName": "Codex"
+  }
+}
