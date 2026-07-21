@@ -1,5 +1,8 @@
 .build/
 .swiftpm/
 DerivedData/
+work/
 .DS_Store
+xcuserdata/
+*.xcuserstate
 phase-0-live-probe.json

@@ -76,16 +76,18 @@ swift run codex-notch-pet-spike \
   --listen-seconds 3
 ```
 
-Expected test receipt: 13 tests, 0 failures. The runtime command emits only a
+Expected current test receipt: 27 tests, 0 failures. The runtime command emits only a
 sanitized local JSON summary.
 
 Final stability gate: three consecutive state-DB-only live probes all returned
 `connection: connected`, two usage buckets, 20 recent threads, zero malformed
 lines, and `selectedState: unavailable`; none fabricated an active thread.
 
-## Next engineering slice
+## Implemented engineering slice
 
-Build a static AppKit `NSPanel` + SwiftUI shell with fake status fixtures, real
-quota/recent-task data, stale/offline handling, v2 pet loading, and an explicit
-live-status-unavailable state. Do not claim full MVP status until a supported
-same-runtime connection or other official live-status surface is proven.
+The native AppKit `NSPanel` + SwiftUI shell now includes real quota/recent-task
+data, stale/offline handling, strict v2 pet loading, truthful
+live-status-unavailable UI, notch geometry, local pet interactions, and an
+explicit review handoff to Codex. Full live status remains blocked until a
+supported same-runtime connection or other official live-status surface is
+proven.

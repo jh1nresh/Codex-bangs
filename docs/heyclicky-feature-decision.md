@@ -20,17 +20,18 @@ open-source build are historical evidence only.
 
 | Capability | Decision for Codex Notch Pet |
 | --- | --- |
-| Persistent character presence | Core: notch pet, deterministic state animation, click-to-expand. |
-| Contextual reactions | Core: fixed local microcopy such as `Waiting for you`, `Usage low`, and `Offline`; no model call and no prompt access. |
+| Persistent character presence | Core: hidden at rest, pet inside a hover-revealed compact notch island, deterministic state animation, explicit detail expansion. |
+| Contextual reactions | Core: truthful status labels plus deterministic semantic pet animations; no model call and no prompt access. |
 | Menu bar and non-activating panel | Core: matches the existing AppKit boundary. |
+| Pet interaction | Core: single-click wave, double-click jump, and panel-local pointer gaze; no global tracking. |
+| Talk to pet | Core: text-only `Open in Codex` review handoff; Codex owns Send, approvals, and task lifecycle. |
 
 ## Later
 
 | Capability | Safe form |
 | --- | --- |
 | Cursor-side companion | Explicit hotkey opens a small read-only status bubble; no constant cursor chasing. |
-| Cursor awareness | After the shell works, eyes/head may look toward the local cursor; disable with Reduce Motion and never capture the screen. |
-| Return to Codex task | Navigate through a supported Codex task link/API only; never send a turn or approve work. |
+| Return to an existing Codex task | Navigate through a documented task link/API if one becomes available; never guess an internal thread route. |
 | Spoken status | Optional macOS system TTS with fixed templates; no microphone and no cloud. |
 | Character/personality packs | Continue the local v2 pet-package path without expanding data permissions. |
 
@@ -41,6 +42,8 @@ open-source build are historical evidence only.
 - cross-app arrows, automated clicks, or Accessibility-driven actions;
 - generic AI chat or retained prompt/transcript summaries;
 - background agents that build, research, email, or approve on the user's behalf.
+- one-click app-server task execution without a long-lived approval, input,
+  cancellation, and recovery controller.
 
 Those features change the app from a monitor into an agent, add high-risk
 permissions, duplicate Codex, and violate the privacy, no-cloud, read-only, and
@@ -55,11 +58,17 @@ The installed HeyClicky build runs a bundled Codex child as an app-server over
 stdio. This confirms its process architecture, not which JSON-RPC methods
 HeyClicky calls. Separately, this project's live probe against the ChatGPT-
 bundled Codex runtime confirmed that the same stdio architecture can obtain
-quota and recent-task history. A separately launched copy of HeyClicky's
-bundled Codex runtime also returned `notLoaded` for other processes' threads;
-neither observation solves the cross-process live-status blocker.
+quota and recent-task history, but not cross-process live status.
 Codex Notch Pet must use the user's supported Codex/ChatGPT executable; it must
 not discover or depend on HeyClicky's private bundled runtime.
+
+The currently installed Codex desktop app also registers a local
+`codex://new?prompt=...` route. Codex-bangs uses it only as an explicit review
+handoff: it pre-fills a new composer and does not start a turn. Because the
+route is not publicly documented, failure to open is surfaced and this remains
+a compatibility risk rather than a task-execution contract. Before opening,
+Codex-bangs binds the handoff to a valid app signed by OpenAI's current team and
+registered with the expected Codex bundle identifier.
 
 ## Current primary sources
 
@@ -67,7 +76,13 @@ not discover or depend on HeyClicky's private bundled runtime.
 - [HeyClicky privacy policy](https://www.heyclicky.com/privacy-policy)
 - [HeyClicky public releases](https://github.com/farzaa/clicky-releases/releases)
 - [HeyClicky legacy open-source macOS app](https://github.com/farzaa/clicky)
+- [Apple DynamicIsland API](https://developer.apple.com/documentation/widgetkit/dynamicisland)
+- [Apple Live Activities design guidance](https://developer.apple.com/design/human-interface-guidelines/live-activities)
 
 The public source repository represents an older version; current implementation
 details not confirmed by the product, privacy, or release pages are treated as
 inference rather than current fact.
+
+WidgetKit's `DynamicIsland` is an iPhone Live Activity API, not a macOS notch
+API. Codex-bangs borrows only its minimal/compact/expanded presentation model;
+the macOS implementation remains public AppKit and SwiftUI.
