@@ -5,13 +5,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let model = AppModel()
 
     private var panelController: NotchPanelController?
+    private var settingsWindowController: SettingsWindowController?
+    private var globalHotKeyService: GlobalHotKeyService?
     private var statusItem: NSStatusItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
 
-        let panelController = NotchPanelController(model: model)
+        let panelController = NotchPanelController(model: model) { [weak self] in
+            self?.openSettings()
+        }
         self.panelController = panelController
+        configureGlobalHotKey(for: panelController)
         configureStatusItem()
 
         let arguments = Set(CommandLine.arguments.dropFirst())
@@ -24,6 +29,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         model.stop()
+        globalHotKeyService?.stop()
         panelController?.tearDown()
     }
 
@@ -48,6 +54,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let menu = NSMenu()
         menu.addItem(menuItem("Show / Hide", action: #selector(togglePanel)))
+        let talkItem = menuItem("Talk to pet", action: #selector(showTalkToPet))
+        talkItem.keyEquivalent = " "
+        talkItem.keyEquivalentModifierMask = [.control, .option]
+        menu.addItem(talkItem)
         menu.addItem(menuItem("Refresh", action: #selector(refresh), keyEquivalent: "r"))
         menu.addItem(.separator())
         menu.addItem(menuItem("Settings…", action: #selector(openSettings), keyEquivalent: ","))
@@ -75,19 +85,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         model.refresh()
     }
 
-    @objc private func openSettings() {
-        NSApp.activate(ignoringOtherApps: true)
-        let opened = NSApp.sendAction(
-            Selector(("showSettingsWindow:")),
-            to: nil,
-            from: nil
-        )
-        if !opened {
-            NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
+    @objc func openSettings() {
+        panelController?.setExpanded(false)
+
+        let controller: SettingsWindowController
+        if let settingsWindowController {
+            controller = settingsWindowController
+        } else {
+            let newController = SettingsWindowController(model: model)
+            settingsWindowController = newController
+            controller = newController
         }
+        controller.present()
+    }
+
+    @objc private func showTalkToPet() {
+        panelController?.showTalkToPet()
     }
 
     @objc private func quit() {
         NSApp.terminate(nil)
+    }
+
+    private func configureGlobalHotKey(for panelController: NotchPanelController) {
+        let service = GlobalHotKeyService { [weak panelController] in
+            panelController?.showTalkToPet()
+        }
+        guard service.start() else {
+            model.setTalkShortcutAvailable(false)
+            NSLog("Codex-bangs could not register the Control-Option-Space shortcut.")
+            return
+        }
+        model.setTalkShortcutAvailable(true)
+        globalHotKeyService = service
     }
 }

@@ -28,11 +28,23 @@ struct NotchRootView: View {
                     onSettings: onSettings,
                     onQuit: onQuit
                 )
+                .transition(
+                    .asymmetric(
+                        insertion: .opacity.combined(with: .move(edge: .top)),
+                        removal: .opacity
+                    )
+                )
             } else if hasNotch && model.isNotchRevealed {
                 CompactNotchView(
                     model: model,
                     centerGap: centerGap,
                     onExpand: onToggleExpanded
+                )
+                .transition(
+                    .asymmetric(
+                        insertion: .opacity.combined(with: .move(edge: .top)),
+                        removal: .opacity
+                    )
                 )
             } else if !hasNotch {
                 NoNotchPillView(
@@ -51,11 +63,11 @@ struct NotchRootView: View {
         .onHover(perform: onHoverChanged)
         .environment(\.colorScheme, .dark)
         .animation(
-            reduceMotion ? nil : .smooth(duration: 0.30, extraBounce: 0.03),
+            reduceMotion ? nil : .smooth(duration: 0.38, extraBounce: 0.0),
             value: model.isExpanded
         )
         .animation(
-            reduceMotion ? nil : .smooth(duration: 0.30, extraBounce: 0.03),
+            reduceMotion ? nil : .smooth(duration: 0.38, extraBounce: 0.0),
             value: model.isNotchRevealed
         )
         .onExitCommand {
@@ -260,6 +272,8 @@ private struct ExpandedNotchView: View {
     let onSettings: () -> Void
     let onQuit: () -> Void
 
+    @FocusState private var isTaskFieldFocused: Bool
+
     var body: some View {
         VStack(spacing: 12) {
             HStack(spacing: 0) {
@@ -322,10 +336,16 @@ private struct ExpandedNotchView: View {
                             .transition(.opacity.combined(with: .move(edge: .leading)))
                     }
 
-                    Text("Current task")
-                        .font(.system(size: 10, weight: .medium, design: .rounded))
-                        .foregroundStyle(.secondary)
-                        .tracking(0.2)
+                    HStack(spacing: 8) {
+                        Text("Current task")
+                            .font(.system(size: 10, weight: .medium, design: .rounded))
+                            .foregroundStyle(.secondary)
+                            .tracking(0.2)
+
+                        Spacer()
+
+                        agentMenu
+                    }
 
                     Text(model.presentedTaskTitle)
                         .font(.system(size: 14, weight: .medium, design: .rounded))
@@ -353,30 +373,82 @@ private struct ExpandedNotchView: View {
 
                     Spacer()
 
-                    Text("Review before sending")
+                    Text(
+                        model.isTalkShortcutAvailable
+                            ? "Read-only · ⌃⌥Space"
+                            : "Read-only · shortcut unavailable"
+                    )
                         .font(.system(size: 9, design: .rounded))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(
+                            model.isTalkShortcutAvailable
+                                ? Color.secondary
+                                : Color.orange
+                        )
                 }
 
-                HStack(spacing: 8) {
-                    TextField("What should Codex work on?", text: $model.taskDraft, axis: .vertical)
-                        .textFieldStyle(.roundedBorder)
-                        .lineLimit(1...2)
-                        .onChange(of: model.taskDraft) {
-                            let bounded = CodexDesktopHandoff
-                                .truncatingToMaximumUTF8Bytes(model.taskDraft)
-                            if model.taskDraft != bounded {
-                                model.taskDraft = bounded
-                            }
+                TextField("Ask a question or describe a task…", text: $model.taskDraft, axis: .vertical)
+                    .textFieldStyle(.roundedBorder)
+                    .lineLimit(1...2)
+                    .focused($isTaskFieldFocused)
+                    .disabled(model.isRunningPetTask)
+                    .onChange(of: model.taskDraft) {
+                        let bounded = CodexDesktopHandoff
+                            .truncatingToMaximumUTF8Bytes(model.taskDraft)
+                        if model.taskDraft != bounded {
+                            model.taskDraft = bounded
                         }
-                        .onSubmit(onOpenInCodex)
+                    }
+                    .onSubmit(model.askPet)
+                    .onChange(of: model.taskFocusRequest) {
+                        isTaskFieldFocused = true
+                    }
+
+                HStack(spacing: 8) {
+                    if model.isRunningPetTask {
+                        Button("Stop", role: .cancel, action: model.cancelPetTask)
+                            .controlSize(.small)
+                            .adaptiveGlassButton()
+                    } else {
+                        Button("Ask", action: model.askPet)
+                            .tint(.cyan.opacity(0.82))
+                            .controlSize(.small)
+                            .adaptiveGlassButton(prominent: true)
+                            .disabled(
+                                model.taskDraft
+                                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                                    .isEmpty
+                            )
+
+                        Button("Guide me", action: model.guideMe)
+                            .controlSize(.small)
+                            .adaptiveGlassButton()
+                            .help("Capture this screen once and ask Codex for read-only guidance")
+                    }
 
                     Button("Open in Codex", action: onOpenInCodex)
                         .tint(.cyan.opacity(0.82))
                         .controlSize(.small)
-                        .adaptiveGlassButton(prominent: true)
+                        .adaptiveGlassButton()
                         .disabled(model.taskDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                    Spacer()
+
+                    if !model.activeAgentSelectedSkillIDs.isEmpty {
+                        Text("\(model.activeAgentSelectedSkillIDs.count) skills")
+                            .font(.system(size: 9, design: .rounded))
+                            .foregroundStyle(.secondary)
+                    }
                 }
+
+                Label(
+                    "Guide me: one screenshot · advice only · never controls",
+                    systemImage: "eye.fill"
+                )
+                .font(.system(size: 9, design: .rounded))
+                .foregroundStyle(.secondary)
+                .accessibilityLabel(
+                    "Guide me captures one screenshot for advice only and never controls your computer"
+                )
 
                 if let feedback = model.taskHandoffFeedback {
                     Text(feedback)
@@ -388,7 +460,86 @@ private struct ExpandedNotchView: View {
             .padding(.vertical, 8)
             .softMaterialCard(cornerRadius: 14, tint: .indigo)
 
-            VStack(alignment: .leading, spacing: 6) {
+            if let response = model.taskResponse {
+                VStack(alignment: .leading, spacing: 6) {
+                    Label("Pet response", systemImage: "text.bubble")
+                        .font(.system(size: 10, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.secondary)
+
+                    ScrollView {
+                        Text(response)
+                            .font(.system(size: 11, design: .rounded))
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .scrollIndicators(.hidden)
+                    .frame(maxHeight: 86)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .softMaterialCard(cornerRadius: 14, tint: .cyan)
+            } else {
+                usageSection
+            }
+
+            HStack(spacing: 8) {
+                Text(model.connectionDetail)
+                    .font(.system(size: 10, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+
+                Spacer()
+
+                Button("Refresh", action: onRefresh)
+                    .disabled(model.isRefreshing || model.isPreviewMode)
+                    .accessibilityLabel("Refresh Codex data")
+                Button("Settings", action: onSettings)
+                Button("Quit", action: onQuit)
+            }
+            .buttonStyle(.borderless)
+            .font(.system(size: 11, weight: .medium, design: .rounded))
+        }
+        .padding(.horizontal, 14)
+        .padding(.top, hasNotch ? 7 : 10)
+        .padding(.bottom, 12)
+        .background(
+            NotchIslandBackground(
+                cornerRadius: 24,
+                shadowRadius: 20,
+                topAttached: hasNotch
+            )
+        )
+        .accessibilityElement(children: .contain)
+    }
+
+    @ViewBuilder
+    private var agentMenu: some View {
+        Menu {
+            ForEach(model.agentProfiles) { profile in
+                Button {
+                    model.activateAgentProfile(profile.id)
+                } label: {
+                    Label(
+                        profile.name,
+                        systemImage: profile.role.systemImageName
+                    )
+                }
+            }
+        } label: {
+            Label(
+                model.activeAgentProfile.name,
+                systemImage: model.activeAgentProfile.role.systemImageName
+            )
+            .font(.system(size: 9, weight: .semibold, design: .rounded))
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .help("Summon an agent and its assigned pet")
+        .accessibilityLabel("Active agent: \(model.activeAgentProfile.name)")
+    }
+
+    private var usageSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
                     Text("Usage")
                         .font(.system(size: 10, weight: .semibold, design: .rounded))
@@ -429,35 +580,6 @@ private struct ExpandedNotchView: View {
                     .frame(maxHeight: 78)
                 }
             }
-
-            HStack(spacing: 8) {
-                Text(model.connectionDetail)
-                    .font(.system(size: 10, design: .rounded))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-
-                Spacer()
-
-                Button("Refresh", action: onRefresh)
-                    .disabled(model.isRefreshing || model.isPreviewMode)
-                    .accessibilityLabel("Refresh Codex data")
-                Button("Settings", action: onSettings)
-                Button("Quit", action: onQuit)
-            }
-            .buttonStyle(.borderless)
-            .font(.system(size: 11, weight: .medium, design: .rounded))
-        }
-        .padding(.horizontal, 14)
-        .padding(.top, hasNotch ? 7 : 10)
-        .padding(.bottom, 12)
-        .background(
-            NotchIslandBackground(
-                cornerRadius: 24,
-                shadowRadius: 20,
-                topAttached: hasNotch
-            )
-        )
-        .accessibilityElement(children: .contain)
     }
 }
 

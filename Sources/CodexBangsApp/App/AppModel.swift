@@ -44,6 +44,21 @@ private enum PetImportOutcome: Sendable {
     case unknownFailure
 }
 
+private struct CapabilityDiscoveryOutcome: Sendable {
+    let skills: [CodexSkillMetadata]
+    let plugins: [ConfiguredCodexPlugin]
+}
+
+private enum PetTaskKind: Equatable, Sendable {
+    case ask
+    case guide
+}
+
+private enum PetTaskPreparationError: Error, Sendable {
+    case executableNotFound
+    case invalidWorkspace
+}
+
 @Observable
 @MainActor
 final class AppModel {
@@ -52,12 +67,17 @@ final class AppModel {
     var isExpanded = false
     var isNotchRevealed = false
     var isRefreshing = false
+    private(set) var taskFocusRequest: UInt64 = 0
+    private(set) var isRefreshingCapabilities = false
+    private(set) var isRunningPetTask = false
     private(set) var isImportingPet = false
+    private(set) var isTalkShortcutAvailable = true
     var isPreviewMode = false
     var taskDraft = ""
     private(set) var interactionAnimation: PetAnimationState?
     private(set) var petMessage: String?
     private(set) var taskHandoffFeedback: String?
+    private(set) var taskResponse: String?
     private(set) var petImportFeedback: PetImportFeedback?
 
     var privacyMode: Bool {
@@ -65,14 +85,31 @@ final class AppModel {
     }
 
     var selectedPetID: String {
-        didSet { defaults.set(selectedPetID, forKey: Keys.selectedPetID) }
+        didSet {
+            defaults.set(selectedPetID, forKey: Keys.selectedPetID)
+            updateActiveProfilePetIfNeeded()
+        }
+    }
+
+    var selectedAgentProfileID: String {
+        didSet {
+            defaults.set(selectedAgentProfileID, forKey: Keys.selectedAgentProfileID)
+            synchronizePetWithActiveProfile()
+        }
     }
 
     var executablePath: String {
         didSet { defaults.set(executablePath, forKey: Keys.executablePath) }
     }
 
+    var taskWorkspacePath: String {
+        didSet { defaults.set(taskWorkspacePath, forKey: Keys.taskWorkspacePath) }
+    }
+
     private(set) var availablePets: [LoadedPetPackage] = []
+    private(set) var availableSkills: [CodexSkillMetadata] = []
+    private(set) var configuredPlugins: [ConfiguredCodexPlugin] = []
+    private(set) var agentProfiles: [AgentPetProfile]
     private(set) var buckets: [UsageBucket] = []
     private(set) var selectedTask: SelectedTask?
     private(set) var codexRTTMilliseconds: Int64?
@@ -86,6 +123,9 @@ final class AppModel {
     @ObservationIgnored private var refreshTask: Task<Void, Never>?
     @ObservationIgnored private var petDiscoveryTask: Task<Void, Never>?
     @ObservationIgnored private var petImportTask: Task<Void, Never>?
+    @ObservationIgnored private var capabilityDiscoveryTask: Task<Void, Never>?
+    @ObservationIgnored private var petTask: Task<Void, Never>?
+    @ObservationIgnored private var taskRunner: CodexTaskRunner?
     @ObservationIgnored private var interactionTask: Task<Void, Never>?
     @ObservationIgnored private var petLibraryGeneration: UInt64 = 0
     @ObservationIgnored private var interactionGeneration: UInt64 = 0
@@ -97,9 +137,24 @@ final class AppModel {
     ) {
         self.defaults = defaults
         self.petsRoot = petsRoot
+        let initialPetID = defaults.string(forKey: Keys.selectedPetID)
+            ?? Self.builtInPetID
+        let profiles = Self.initialAgentProfiles(
+            from: defaults.data(forKey: Keys.agentProfiles),
+            fallbackPetID: initialPetID
+        )
+        let storedProfileID = defaults.string(forKey: Keys.selectedAgentProfileID)
+        let initialProfileID = storedProfileID.flatMap { candidate in
+            profiles.contains(where: { $0.id == candidate }) ? candidate : nil
+        } ?? profiles[0].id
+
         privacyMode = defaults.bool(forKey: Keys.privacyMode)
-        selectedPetID = defaults.string(forKey: Keys.selectedPetID) ?? ""
+        selectedPetID = profiles.first(where: { $0.id == initialProfileID })?.petID
+            ?? initialPetID
+        selectedAgentProfileID = initialProfileID
         executablePath = defaults.string(forKey: Keys.executablePath) ?? ""
+        taskWorkspacePath = defaults.string(forKey: Keys.taskWorkspacePath) ?? ""
+        agentProfiles = profiles
     }
 
     var selectedPet: LoadedPetPackage? {
@@ -108,6 +163,22 @@ final class AppModel {
 
     var usesBuiltInPet: Bool {
         selectedPetID == Self.builtInPetID || selectedPet == nil
+    }
+
+    var activeAgentProfile: AgentPetProfile {
+        agentProfiles.first(where: { $0.id == selectedAgentProfileID })
+            ?? agentProfiles[0]
+    }
+
+    var activeAgentSelectedSkillIDs: Set<String> {
+        let installed = Set(availableSkills.map(\.id))
+        return Set(activeAgentProfile.selectedSkillIDs.filter(installed.contains))
+    }
+
+    var taskPromptForHandoff: String {
+        CodexDesktopHandoff.truncatingToMaximumUTF8Bytes(
+            composedTaskPrompt(from: taskDraft, enforceReadOnly: false)
+        )
     }
 
     var collapsedRemainingPercent: Int? {
@@ -145,6 +216,9 @@ final class AppModel {
     }
 
     var petAnimationState: PetAnimationState {
+        if isRunningPetTask {
+            return .running
+        }
         if let interactionAnimation {
             return interactionAnimation
         }
@@ -205,6 +279,7 @@ final class AppModel {
 
     func start(previewMode: Bool) {
         loadPets()
+        reloadCapabilities()
         isPreviewMode = previewMode
 
         if previewMode {
@@ -229,6 +304,9 @@ final class AppModel {
         refreshTask?.cancel()
         petDiscoveryTask?.cancel()
         petImportTask?.cancel()
+        capabilityDiscoveryTask?.cancel()
+        petTask?.cancel()
+        taskRunner?.cancel()
         interactionTask?.cancel()
         petLibraryGeneration &+= 1
         isImportingPet = false
@@ -236,7 +314,12 @@ final class AppModel {
         refreshTask = nil
         petDiscoveryTask = nil
         petImportTask = nil
+        capabilityDiscoveryTask = nil
+        petTask = nil
+        taskRunner = nil
         interactionTask = nil
+        isRefreshingCapabilities = false
+        isRunningPetTask = false
     }
 
     func refresh() {
@@ -265,6 +348,91 @@ final class AppModel {
             guard !Task.isCancelled else { return }
             self?.apply(outcome)
         }
+    }
+
+    func reloadCapabilities() {
+        guard !isRefreshingCapabilities else { return }
+        isRefreshingCapabilities = true
+        capabilityDiscoveryTask?.cancel()
+
+        capabilityDiscoveryTask = Task { [weak self] in
+            let outcome = await Task.detached(priority: .utility) {
+                CapabilityDiscoveryOutcome(
+                    skills: CodexCapabilityDiscovery.discoverSkills(),
+                    plugins: CodexCapabilityDiscovery.discoverConfiguredPlugins()
+                )
+            }.value
+
+            guard !Task.isCancelled, let self else { return }
+            self.availableSkills = outcome.skills
+            self.configuredPlugins = outcome.plugins
+            self.isRefreshingCapabilities = false
+            self.capabilityDiscoveryTask = nil
+        }
+    }
+
+    func activateAgentProfile(_ profileID: String) {
+        guard agentProfiles.contains(where: { $0.id == profileID }) else { return }
+        selectedAgentProfileID = profileID
+        triggerPetAnimation(.waving, message: "\(activeAgentProfile.name) is here!")
+    }
+
+    func assignPet(_ petID: String, to profileID: String) {
+        guard petID == Self.builtInPetID
+                || availablePets.contains(where: { $0.id == petID }),
+              let index = agentProfiles.firstIndex(where: { $0.id == profileID }) else {
+            return
+        }
+
+        agentProfiles[index].petID = petID
+        persistAgentProfiles()
+        if profileID == selectedAgentProfileID {
+            selectedPetID = petID
+        }
+    }
+
+    func isSkillSelected(_ skillID: String, for profileID: String) -> Bool {
+        agentProfiles.first(where: { $0.id == profileID })?
+            .selectedSkillIDs.contains(skillID) == true
+    }
+
+    func setSkill(_ skillID: String, enabled: Bool, for profileID: String) {
+        guard availableSkills.contains(where: { $0.id == skillID }),
+              let index = agentProfiles.firstIndex(where: { $0.id == profileID }) else {
+            return
+        }
+
+        var selected = agentProfiles[index].selectedSkillIDs
+        if enabled {
+            if !selected.contains(skillID) {
+                selected.append(skillID)
+            }
+        } else {
+            selected.removeAll { $0 == skillID }
+        }
+        agentProfiles[index].selectedSkillIDs = selected
+        persistAgentProfiles()
+    }
+
+    func askPet() {
+        runPetTask(.ask)
+    }
+
+    func guideMe() {
+        runPetTask(.guide)
+    }
+
+    func cancelPetTask() {
+        petTask?.cancel()
+        taskRunner?.cancel()
+    }
+
+    func requestTaskFocus() {
+        taskFocusRequest &+= 1
+    }
+
+    func setTalkShortcutAvailable(_ isAvailable: Bool) {
+        isTalkShortcutAvailable = isAvailable
     }
 
     func waveAtUser() {
@@ -367,6 +535,138 @@ final class AppModel {
         }
     }
 
+    private func runPetTask(_ kind: PetTaskKind) {
+        guard !isRunningPetTask else { return }
+
+        let draft = taskDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        if kind == .ask, draft.isEmpty {
+            taskHandoffFeedback = "Tell your pet what you need first."
+            return
+        }
+        guard !isPreviewMode else {
+            taskHandoffFeedback = "Direct Codex tasks are unavailable in Preview mode."
+            return
+        }
+
+        let userPrompt = kind == .guide
+            ? Self.guidePrompt(question: draft)
+            : draft
+        let prompt = composedTaskPrompt(
+            from: userPrompt,
+            enforceReadOnly: true
+        )
+        let explicitExecutablePath = executablePath
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let configuredWorkspacePath = taskWorkspacePath
+
+        isRunningPetTask = true
+        taskResponse = nil
+        taskHandoffFeedback = kind == .guide
+            ? "Capturing this screen once…"
+            : "Asking \(activeAgentProfile.name)…"
+        triggerPetAnimation(.running, message: kind == .guide ? "Looking…" : "Working…")
+
+        petTask = Task { [weak self] in
+            guard let self else { return }
+            var capture: EphemeralScreenCapture?
+            defer { capture?.remove() }
+
+            do {
+                let executableURL = await Task.detached(priority: .userInitiated) {
+                    CodexExecutableLocator.locate(
+                        explicitPath: explicitExecutablePath.isEmpty
+                            ? nil
+                            : explicitExecutablePath
+                    )
+                }.value
+                guard let executableURL else {
+                    throw PetTaskPreparationError.executableNotFound
+                }
+                try Task.checkCancellation()
+
+                let workspaceURL = try await Task.detached(priority: .utility) {
+                    guard let url = Self.resolveTaskWorkspace(
+                        configuredPath: configuredWorkspacePath
+                    ) else {
+                        throw PetTaskPreparationError.invalidWorkspace
+                    }
+                    return url
+                }.value
+                try Task.checkCancellation()
+
+                if kind == .guide {
+                    capture = try await ScreenCaptureService()
+                        .captureDisplayUnderPointer()
+                }
+                try Task.checkCancellation()
+
+                let runner = CodexTaskRunner(executableURL: executableURL)
+                self.taskRunner = runner
+                let result = try await runner.run(
+                    CodexTaskRequest(
+                        prompt: prompt,
+                        workingDirectory: workspaceURL,
+                        screenCapture: capture,
+                        isEphemeral: kind == .guide
+                    )
+                )
+                try Task.checkCancellation()
+                self.finishPetTask(result: result, kind: kind)
+            } catch {
+                self.finishPetTask(error: error)
+            }
+        }
+    }
+
+    private func finishPetTask(result: CodexTaskResult, kind: PetTaskKind) {
+        taskRunner = nil
+        petTask = nil
+        isRunningPetTask = false
+        taskDraft = ""
+        taskResponse = Self.boundedTaskResponse(result.finalMessage)
+        taskHandoffFeedback = kind == .guide
+            ? "One-time screenshot removed. Nothing was clicked."
+            : "Codex task finished in read-only mode."
+        triggerPetAnimation(.waving, message: "Done!")
+        if kind == .ask {
+            refresh()
+        }
+    }
+
+    private func finishPetTask(error: Error) {
+        taskRunner = nil
+        petTask = nil
+        isRunningPetTask = false
+
+        if error is CancellationError {
+            taskHandoffFeedback = "Stopped."
+            triggerPetAnimation(.idle, message: "Stopped")
+            return
+        }
+
+        switch error {
+        case PetTaskPreparationError.executableNotFound:
+            taskHandoffFeedback = "Couldn't find a supported Codex executable."
+        case PetTaskPreparationError.invalidWorkspace:
+            taskHandoffFeedback = "Choose an existing task folder in Settings."
+        case ScreenCaptureServiceError.permissionDenied:
+            taskHandoffFeedback = "Allow Screen Recording in System Settings, then relaunch Codex-bangs."
+        case ScreenCaptureServiceError.noDisplayAvailable:
+            taskHandoffFeedback = "No display is available to capture."
+        case ScreenCaptureServiceError.captureFailed,
+             ScreenCaptureServiceError.encodingFailed,
+             ScreenCaptureServiceError.storageFailed:
+            taskHandoffFeedback = "The one-time screenshot couldn't be prepared."
+        case CodexTaskRunnerError.outputLimitExceeded:
+            taskHandoffFeedback = "Codex returned more text than this panel can safely display."
+        case is CodexTaskRunnerError:
+            taskHandoffFeedback = "Codex couldn't finish this read-only task."
+        default:
+            taskHandoffFeedback = "The pet task couldn't be completed."
+        }
+        triggerPetAnimation(.failed, message: "Try again")
+    }
+
     private func apply(_ outcome: MonitorRefreshOutcome) {
         let previousStatus = displayStatus
         isRefreshing = false
@@ -450,6 +750,166 @@ final class AppModel {
             return
         } else {
             selectedPetID = Self.builtInPetID
+        }
+    }
+
+    private func synchronizePetWithActiveProfile() {
+        let petID = activeAgentProfile.petID
+        guard selectedPetID != petID else { return }
+        selectedPetID = petID
+    }
+
+    private func updateActiveProfilePetIfNeeded() {
+        guard let index = agentProfiles.firstIndex(where: {
+            $0.id == selectedAgentProfileID
+        }), agentProfiles[index].petID != selectedPetID else {
+            return
+        }
+        agentProfiles[index].petID = selectedPetID
+        persistAgentProfiles()
+    }
+
+    private func persistAgentProfiles() {
+        guard let data = try? JSONEncoder().encode(agentProfiles) else { return }
+        defaults.set(data, forKey: Keys.agentProfiles)
+    }
+
+    private func composedTaskPrompt(
+        from userPrompt: String,
+        enforceReadOnly: Bool
+    ) -> String {
+        let trimmed = userPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        let profile = activeAgentProfile
+        let installedSkillIDs = Set(availableSkills.map(\.id))
+        let skillPrefix = profile.selectedSkillIDs
+            .filter(installedSkillIDs.contains)
+            .map { "$\($0)" }
+            .joined(separator: " ")
+
+        var sections = [
+            skillPrefix,
+            Self.roleInstruction(for: profile.role),
+        ]
+        if enforceReadOnly {
+            sections.append(
+                "Do not perform external side effects through plugins or connected apps. Use read-only tools only."
+            )
+        }
+        sections.append(trimmed)
+        return sections
+        .filter { !$0.isEmpty }
+        .joined(separator: "\n\n")
+    }
+
+    nonisolated private static func roleInstruction(for role: AgentPetRole) -> String {
+        switch role {
+        case .builder:
+            return "Act as a focused builder. Give a concrete, verifiable result."
+        case .reviewer:
+            return "Act as a careful reviewer. Prioritize correctness, risk, and evidence."
+        case .guide:
+            return "Act as a concise guide. Explain the next action in clear steps."
+        case .custom:
+            return "Help with the request clearly and concretely."
+        }
+    }
+
+    nonisolated private static func guidePrompt(question: String) -> String {
+        let trimmed = question.trimmingCharacters(in: .whitespacesAndNewlines)
+        let request = trimmed.isEmpty
+            ? "Tell me what I should do next."
+            : trimmed
+        return """
+        Analyze only the attached one-time screenshot. Do not click, type, control the computer, or call tools that change files or external systems. Explain what is visible, then give at most three concrete next steps.
+
+        Question: \(request)
+        """
+    }
+
+    nonisolated private static func resolveTaskWorkspace(
+        configuredPath: String
+    ) -> URL? {
+        let fileManager = FileManager.default
+        let trimmed = configuredPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        let usesPrivateDefault = trimmed.isEmpty
+
+        let candidate: URL
+        if usesPrivateDefault {
+            guard let applicationSupport = fileManager.urls(
+                for: .applicationSupportDirectory,
+                in: .userDomainMask
+            ).first else {
+                return nil
+            }
+            candidate = applicationSupport
+                .appendingPathComponent("Codex-bangs", isDirectory: true)
+                .appendingPathComponent("Assistant Tasks", isDirectory: true)
+            do {
+                try fileManager.createDirectory(
+                    at: candidate,
+                    withIntermediateDirectories: true,
+                    attributes: [.posixPermissions: 0o700]
+                )
+            } catch {
+                return nil
+            }
+        } else {
+            candidate = URL(
+                fileURLWithPath: (trimmed as NSString).expandingTildeInPath,
+                isDirectory: true
+            ).resolvingSymlinksInPath()
+        }
+
+        guard let values = try? candidate.resourceValues(forKeys: [
+            .isDirectoryKey,
+            .isSymbolicLinkKey,
+        ]), values.isDirectory == true, values.isSymbolicLink != true else {
+            return nil
+        }
+        if usesPrivateDefault {
+            do {
+                try fileManager.setAttributes(
+                    [.posixPermissions: 0o700],
+                    ofItemAtPath: candidate.path
+                )
+            } catch {
+                return nil
+            }
+        }
+        return candidate.standardizedFileURL
+    }
+
+    nonisolated private static func boundedTaskResponse(_ response: String) -> String {
+        let trimmed = response.trimmingCharacters(in: .whitespacesAndNewlines)
+        let maximumCharacters = 6_000
+        guard trimmed.count > maximumCharacters else { return trimmed }
+        return String(trimmed.prefix(maximumCharacters)) + "…"
+    }
+
+    nonisolated private static func initialAgentProfiles(
+        from data: Data?,
+        fallbackPetID: String
+    ) -> [AgentPetProfile] {
+        let persisted = data.flatMap {
+            try? JSONDecoder().decode([AgentPetProfile].self, from: $0)
+        } ?? []
+
+        return AgentPetProfile.builtIns.map { builtIn in
+            guard let saved = persisted.first(where: { $0.id == builtIn.id }) else {
+                return AgentPetProfile(
+                    id: builtIn.id,
+                    name: builtIn.name,
+                    role: builtIn.role,
+                    petID: fallbackPetID
+                )
+            }
+            return AgentPetProfile(
+                id: builtIn.id,
+                name: builtIn.name,
+                role: builtIn.role,
+                petID: saved.petID.isEmpty ? fallbackPetID : saved.petID,
+                selectedSkillIDs: saved.selectedSkillIDs
+            )
         }
     }
 
@@ -610,6 +1070,9 @@ final class AppModel {
     private enum Keys {
         static let privacyMode = "privacyMode"
         static let selectedPetID = "selectedPetID"
+        static let selectedAgentProfileID = "selectedAgentProfileID"
+        static let agentProfiles = "agentPetProfiles"
         static let executablePath = "codexExecutablePath"
+        static let taskWorkspacePath = "taskWorkspacePath"
     }
 }

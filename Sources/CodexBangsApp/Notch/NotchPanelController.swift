@@ -5,6 +5,7 @@ import SwiftUI
 @MainActor
 final class NotchPanelController {
     private let model: AppModel
+    private let onOpenSettings: @MainActor () -> Void
     private let panel: NotchPanel
     private let hostingView: FirstMouseHostingView<NotchRootView>
 
@@ -12,9 +13,16 @@ final class NotchPanelController {
     private var globalMouseMonitor: Any?
     private var localEventMonitor: Any?
     private var hoverHideTask: Task<Void, Never>?
+    private var focusTask: Task<Void, Never>?
+    private var renderedCenterGapWidth: CGFloat?
+    private var renderedHasNotch: Bool?
 
-    init(model: AppModel) {
+    init(
+        model: AppModel,
+        onOpenSettings: @escaping @MainActor () -> Void
+    ) {
         self.model = model
+        self.onOpenSettings = onOpenSettings
         panel = NotchPanel(
             contentRect: .zero,
             styleMask: [.borderless, .nonactivatingPanel],
@@ -54,6 +62,8 @@ final class NotchPanelController {
     func hide() {
         hoverHideTask?.cancel()
         hoverHideTask = nil
+        focusTask?.cancel()
+        focusTask = nil
         if !model.isExpanded {
             model.isNotchRevealed = false
         }
@@ -67,6 +77,10 @@ final class NotchPanelController {
     func setExpanded(_ expanded: Bool) {
         guard model.isExpanded != expanded else { return }
         hoverHideTask?.cancel()
+        if !expanded {
+            focusTask?.cancel()
+            focusTask = nil
+        }
         model.isExpanded = expanded
         model.isNotchRevealed = expanded
         panel.permitsKey = expanded
@@ -81,6 +95,14 @@ final class NotchPanelController {
             panel.resignKey()
             panel.orderFrontRegardless()
         }
+    }
+
+    func showTalkToPet() {
+        show()
+        setExpanded(true)
+        panel.makeKeyAndOrderFront(nil)
+        model.requestTaskFocus()
+        scheduleTaskFieldFocus()
     }
 
     func tearDown() {
@@ -98,6 +120,8 @@ final class NotchPanelController {
         }
         hoverHideTask?.cancel()
         hoverHideTask = nil
+        focusTask?.cancel()
+        focusTask = nil
         panel.orderOut(nil)
     }
 
@@ -186,38 +210,44 @@ final class NotchPanelController {
             metrics: metrics
         )
 
-        hostingView.rootView = NotchRootView(
-            model: model,
-            centerGap: layout.centerGap?.width ?? 76,
-            hasNotch: layout.hasNotch,
-            onToggleExpanded: { [weak self] in
-                self?.setExpanded(!(self?.model.isExpanded ?? false))
-            },
-            onHoverChanged: { [weak self] hovering in
-                self?.handleHoverChanged(hovering)
-            },
-            onRefresh: { [weak self] in
-                self?.model.refresh()
-            },
-            onOpenInCodex: { [weak self] in
-                self?.openTaskInCodex()
-            },
-            onSettings: { [weak self] in
-                self?.openSettings()
-            },
-            onQuit: {
-                NSApp.terminate(nil)
-            }
-        )
+        let centerGapWidth = layout.centerGap?.width ?? 76
+        if renderedCenterGapWidth != centerGapWidth
+            || renderedHasNotch != layout.hasNotch {
+            hostingView.rootView = NotchRootView(
+                model: model,
+                centerGap: centerGapWidth,
+                hasNotch: layout.hasNotch,
+                onToggleExpanded: { [weak self] in
+                    self?.setExpanded(!(self?.model.isExpanded ?? false))
+                },
+                onHoverChanged: { [weak self] hovering in
+                    self?.handleHoverChanged(hovering)
+                },
+                onRefresh: { [weak self] in
+                    self?.model.refresh()
+                },
+                onOpenInCodex: { [weak self] in
+                    self?.openTaskInCodex()
+                },
+                onSettings: { [weak self] in
+                    self?.openSettings()
+                },
+                onQuit: {
+                    NSApp.terminate(nil)
+                }
+            )
+            renderedCenterGapWidth = centerGapWidth
+            renderedHasNotch = layout.hasNotch
+        }
 
         let shouldAnimate = animated
             && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         if shouldAnimate {
             NSAnimationContext.runAnimationGroup { context in
-                context.duration = 0.29
+                context.duration = 0.38
                 context.timingFunction = CAMediaTimingFunction(
-                    controlPoints: 0.22,
-                    0.86,
+                    controlPoints: 0.16,
+                    1.00,
                     0.30,
                     1.0
                 )
@@ -303,21 +333,36 @@ final class NotchPanelController {
     }
 
     private func openSettings() {
-        NSApp.activate(ignoringOtherApps: true)
-        let opened = NSApp.sendAction(
-            Selector(("showSettingsWindow:")),
-            to: nil,
-            from: nil
-        )
-        if !opened {
-            NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
-        }
+        setExpanded(false)
+        onOpenSettings()
     }
 
     private func openTaskInCodex() {
-        CodexDesktopLauncher.open(prompt: model.taskDraft) { [weak self] opened in
+        CodexDesktopLauncher.open(prompt: model.taskPromptForHandoff) { [weak self] opened in
             self?.model.recordTaskHandoff(opened: opened)
         }
+    }
+
+    private func scheduleTaskFieldFocus() {
+        focusTask?.cancel()
+        focusTask = Task { [weak self] in
+            for _ in 0..<5 {
+                guard !Task.isCancelled, let self else { return }
+                if self.focusTaskField() {
+                    self.focusTask = nil
+                    return
+                }
+                try? await Task.sleep(for: .milliseconds(75))
+            }
+            self?.focusTask = nil
+        }
+    }
+
+    private func focusTaskField() -> Bool {
+        guard let field = hostingView.firstEditableTextInput() else {
+            return false
+        }
+        return panel.makeFirstResponder(field)
     }
 }
 
@@ -342,5 +387,39 @@ private final class NotchPanel: NSPanel {
 private final class FirstMouseHostingView<Content: View>: NSHostingView<Content> {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
         true
+    }
+
+    func firstEditableTextInput() -> NSResponder? {
+        firstEditableTextField(in: self)
+            ?? firstEditableTextView(in: self)
+    }
+
+    private func firstEditableTextField(in view: NSView) -> NSTextField? {
+        if let field = view as? NSTextField,
+           field.isEditable,
+           field.isEnabled {
+            return field
+        }
+
+        for subview in view.subviews {
+            if let field = firstEditableTextField(in: subview) {
+                return field
+            }
+        }
+        return nil
+    }
+
+    private func firstEditableTextView(in view: NSView) -> NSTextView? {
+        if let textView = view as? NSTextView,
+           textView.isEditable {
+            return textView
+        }
+
+        for subview in view.subviews {
+            if let textView = firstEditableTextView(in: subview) {
+                return textView
+            }
+        }
+        return nil
     }
 }

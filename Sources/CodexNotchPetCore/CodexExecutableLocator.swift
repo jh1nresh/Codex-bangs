@@ -59,7 +59,9 @@ public enum CodexExecutableLocator {
                   !isDirectory.boolValue,
                   fileManager.isExecutableFile(atPath: resolved.path),
                   (try? resolved.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true,
-                  versionString(at: resolved) != nil else {
+                  let version = versionString(at: resolved),
+                  version.split(whereSeparator: \.isNewline).first?
+                    .hasPrefix("codex-cli ") == true else {
                 continue
             }
 

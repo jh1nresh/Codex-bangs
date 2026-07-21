@@ -16,7 +16,7 @@ final class NotchGeometryTests: XCTestCase {
         XCTAssertFalse(layout.hasNotch)
     }
 
-    func testNotchedLayoutExposesCenteredGapAndExpandedSize() {
+    func testNotchedOpenDetailsExtendsDownwardWithoutWidening() {
         let collapsed = NotchGeometry.layout(
             screenFrame: CGRect(x: 0, y: 0, width: 1_512, height: 982),
             cameraHousing: CGRect(x: 666, y: 950, width: 180, height: 32),
@@ -31,8 +31,11 @@ final class NotchGeometryTests: XCTestCase {
         XCTAssertEqual(collapsed.frame, CGRect(x: 536, y: 802, width: 440, height: 180))
         XCTAssertEqual(collapsed.centerGap, CGRect(x: 666, y: 950, width: 180, height: 32))
         XCTAssertTrue(collapsed.hasNotch)
-        XCTAssertEqual(expanded.frame, CGRect(x: 536, y: 612, width: 440, height: 370))
+        XCTAssertEqual(expanded.frame, CGRect(x: 536, y: 552, width: 440, height: 430))
         XCTAssertEqual(expanded.centerGap, collapsed.centerGap)
+        XCTAssertEqual(expanded.frame.minX, collapsed.frame.minX)
+        XCTAssertEqual(expanded.frame.width, collapsed.frame.width)
+        XCTAssertEqual(expanded.frame.maxY, collapsed.frame.maxY)
     }
 
     func testDisplayOriginAndCustomMetricsStayInScreenCoordinates() {
