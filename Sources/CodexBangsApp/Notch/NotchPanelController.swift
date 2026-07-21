@@ -214,8 +214,13 @@ final class NotchPanelController {
             && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         if shouldAnimate {
             NSAnimationContext.runAnimationGroup { context in
-                context.duration = 0.22
-                context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                context.duration = 0.29
+                context.timingFunction = CAMediaTimingFunction(
+                    controlPoints: 0.22,
+                    0.86,
+                    0.30,
+                    1.0
+                )
                 panel.animator().setFrame(layout.frame, display: true)
             }
         } else {

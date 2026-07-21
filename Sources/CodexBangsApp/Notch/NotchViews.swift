@@ -50,8 +50,14 @@ struct NotchRootView: View {
         .contentShape(Rectangle())
         .onHover(perform: onHoverChanged)
         .environment(\.colorScheme, .dark)
-        .animation(reduceMotion ? nil : .snappy(duration: 0.24), value: model.isExpanded)
-        .animation(reduceMotion ? nil : .snappy(duration: 0.24), value: model.isNotchRevealed)
+        .animation(
+            reduceMotion ? nil : .smooth(duration: 0.30, extraBounce: 0.03),
+            value: model.isExpanded
+        )
+        .animation(
+            reduceMotion ? nil : .smooth(duration: 0.30, extraBounce: 0.03),
+            value: model.isNotchRevealed
+        )
         .onExitCommand {
             if model.isExpanded {
                 onToggleExpanded()
@@ -92,37 +98,46 @@ private struct CompactNotchView: View {
                     onDoubleClick: model.playWithUser
                 )
                 .frame(width: 62, height: 62)
+                .petHalo()
 
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 6) {
-                        Text("CURRENT TASK")
-                            .font(.system(size: 10, weight: .semibold, design: .rounded))
+                        Text("Current task")
+                            .font(.system(size: 10, weight: .medium, design: .rounded))
                             .foregroundStyle(.secondary)
+                            .tracking(0.2)
 
                         if model.isPreviewMode {
-                            Text("PREVIEW")
-                                .font(.system(size: 8, weight: .bold, design: .rounded))
-                                .foregroundStyle(.black)
+                            Text("Preview")
+                                .font(.system(size: 8, weight: .semibold, design: .rounded))
+                                .foregroundStyle(.yellow)
                                 .padding(.horizontal, 5)
                                 .padding(.vertical, 2)
-                                .background(.yellow, in: Capsule())
+                                .background(.yellow.opacity(0.13), in: Capsule())
+                                .overlay {
+                                    Capsule().stroke(.yellow.opacity(0.22), lineWidth: 0.7)
+                                }
                         }
                     }
 
                     Text(model.presentedTaskTitle)
-                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .font(.system(size: 14, weight: .medium, design: .rounded))
                         .lineLimit(1)
                         .help(model.presentedTaskTitle)
 
                     Text(compactDetail)
                         .font(.system(size: 10, design: .rounded))
-                        .foregroundStyle(model.petMessage == nil ? Color.secondary : Color.cyan)
+                        .foregroundStyle(
+                            model.petMessage == nil
+                                ? Color.secondary
+                                : Color.cyan.opacity(0.92)
+                        )
                         .lineLimit(1)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(10)
-            .background(.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 14))
+            .padding(11)
+            .softMaterialCard(cornerRadius: 16, tint: .cyan)
 
             HStack(spacing: 8) {
                 Text(model.connectionDetail)
@@ -132,30 +147,51 @@ private struct CompactNotchView: View {
 
                 Spacer()
 
-                Button("Open details", action: onExpand)
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
+                detailsButton
             }
         }
         .padding(.horizontal, 14)
         .padding(.top, 7)
         .padding(.bottom, 10)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(.black.opacity(0.97))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .stroke(.white.opacity(0.12), lineWidth: 1)
-                }
-                .shadow(color: .black.opacity(0.32), radius: 18, y: 8)
-        }
+        .background(NotchIslandBackground(cornerRadius: 24, shadowRadius: 18))
         .accessibilityElement(children: .contain)
     }
 
     private var compactDetail: String {
         if let petMessage = model.petMessage { return petMessage }
         return model.presentedTaskLocation ?? "Click pet to wave · Double-click to play"
+    }
+
+    @ViewBuilder
+    private var detailsButton: some View {
+        if #available(macOS 26, *) {
+            Button(action: onExpand) {
+                HStack(spacing: 6) {
+                    Image(systemName: "chevron.down")
+                        .foregroundStyle(.cyan.opacity(0.90))
+                    Text("Open details")
+                        .foregroundStyle(.white.opacity(0.92))
+                }
+                .font(.system(size: 11, weight: .medium, design: .rounded))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .glassEffect(
+                .regular.tint(.cyan.opacity(0.14)).interactive(),
+                in: .capsule
+            )
+            .accessibilityLabel("Open details")
+        } else {
+            Button(action: onExpand) {
+                Label("Open details", systemImage: "chevron.down")
+            }
+            .tint(.cyan.opacity(0.82))
+            .controlSize(.small)
+            .buttonStyle(.borderedProminent)
+        }
     }
 }
 
@@ -170,13 +206,6 @@ private struct NoNotchPillView: View {
             let wingWidth = max(104, (proxy.size.width - centerGap - 20) / 2)
 
             ZStack {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(.black.opacity(0.97))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .stroke(.white.opacity(0.10), lineWidth: 1)
-                    }
-
                 HStack(spacing: 0) {
                     Button(action: onExpand) {
                         StatusBadge(status: model.displayStatus)
@@ -204,8 +233,10 @@ private struct NoNotchPillView: View {
                     onDoubleClick: model.playWithUser
                 )
                 .frame(width: 42, height: 42)
+                .petHalo()
             }
         }
+        .adaptiveFloatingGlass(cornerRadius: 18)
         .accessibilityElement(children: .contain)
     }
 }
@@ -242,9 +273,10 @@ private struct ExpandedNotchView: View {
                     Button(action: onCollapse) {
                         Image(systemName: "chevron.up")
                             .font(.system(size: 10, weight: .bold))
-                            .frame(width: 18, height: 18)
+                            .frame(width: 16, height: 16)
                     }
-                    .buttonStyle(.plain)
+                    .controlSize(.mini)
+                    .adaptiveGlassButton()
                     .accessibilityLabel("Collapse into notch")
                 }
                 .frame(maxWidth: .infinity, alignment: .trailing)
@@ -259,15 +291,19 @@ private struct ExpandedNotchView: View {
                     onDoubleClick: model.playWithUser
                 )
                 .frame(width: 68, height: 68)
+                .petHalo()
 
                 VStack(alignment: .leading, spacing: 4) {
                     if model.isPreviewMode {
-                        Text("PREVIEW DATA")
-                            .font(.system(size: 9, weight: .bold, design: .rounded))
-                            .foregroundStyle(.black)
+                        Text("Preview")
+                            .font(.system(size: 9, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.yellow)
                             .padding(.horizontal, 7)
                             .padding(.vertical, 3)
-                            .background(.yellow, in: Capsule())
+                            .background(.yellow.opacity(0.13), in: Capsule())
+                            .overlay {
+                                Capsule().stroke(.yellow.opacity(0.22), lineWidth: 0.7)
+                            }
                             .accessibilityLabel("Preview data")
                     }
 
@@ -278,12 +314,13 @@ private struct ExpandedNotchView: View {
                             .transition(.opacity.combined(with: .move(edge: .leading)))
                     }
 
-                    Text("CURRENT TASK")
-                        .font(.system(size: 10, weight: .semibold, design: .rounded))
+                    Text("Current task")
+                        .font(.system(size: 10, weight: .medium, design: .rounded))
                         .foregroundStyle(.secondary)
+                        .tracking(0.2)
 
                     Text(model.presentedTaskTitle)
-                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .font(.system(size: 14, weight: .medium, design: .rounded))
                         .lineLimit(2)
                         .help(model.presentedTaskTitle)
 
@@ -297,12 +334,12 @@ private struct ExpandedNotchView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(10)
-            .background(.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 14))
+            .padding(11)
+            .softMaterialCard(cornerRadius: 16, tint: .cyan)
 
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
-                    Text("TALK TO PET")
+                    Text("Talk to pet")
                         .font(.system(size: 10, weight: .semibold, design: .rounded))
                         .foregroundStyle(.secondary)
 
@@ -315,7 +352,7 @@ private struct ExpandedNotchView: View {
 
                 HStack(spacing: 8) {
                     TextField("What should Codex work on?", text: $model.taskDraft, axis: .vertical)
-                        .textFieldStyle(.plain)
+                        .textFieldStyle(.roundedBorder)
                         .lineLimit(1...2)
                         .onChange(of: model.taskDraft) {
                             let bounded = CodexDesktopHandoff
@@ -327,8 +364,9 @@ private struct ExpandedNotchView: View {
                         .onSubmit(onOpenInCodex)
 
                     Button("Open in Codex", action: onOpenInCodex)
-                        .buttonStyle(.borderedProminent)
+                        .tint(.cyan.opacity(0.82))
                         .controlSize(.small)
+                        .adaptiveGlassButton(prominent: true)
                         .disabled(model.taskDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
 
@@ -340,10 +378,10 @@ private struct ExpandedNotchView: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
-            .background(.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 12))
+            .softMaterialCard(cornerRadius: 14, tint: .indigo)
 
             VStack(alignment: .leading, spacing: 6) {
-                Text("USAGE")
+                Text("Usage")
                     .font(.system(size: 10, weight: .semibold, design: .rounded))
                     .foregroundStyle(.secondary)
 
@@ -355,11 +393,21 @@ private struct ExpandedNotchView: View {
                         .padding(.vertical, 6)
                 } else {
                     ScrollView {
-                        LazyVStack(spacing: 6) {
-                            ForEach(model.usageRows) { row in
+                        LazyVStack(spacing: 0) {
+                            ForEach(
+                                Array(model.usageRows.enumerated()),
+                                id: \.element.id
+                            ) { index, row in
                                 UsageRowView(row: row, isStale: model.isStale)
+
+                                if index < model.usageRows.count - 1 {
+                                    Divider()
+                                        .overlay(.white.opacity(0.065))
+                                        .padding(.leading, 9)
+                                }
                             }
                         }
+                        .softMaterialCard(cornerRadius: 12, tint: .white)
                     }
                     .scrollIndicators(.hidden)
                     .frame(maxHeight: 78)
@@ -386,15 +434,13 @@ private struct ExpandedNotchView: View {
         .padding(.horizontal, 14)
         .padding(.top, hasNotch ? 7 : 10)
         .padding(.bottom, 12)
-        .background {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(.black.opacity(0.96))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .stroke(.white.opacity(0.12), lineWidth: 1)
-                }
-                .shadow(color: .black.opacity(0.35), radius: 20, y: 8)
-        }
+        .background(
+            NotchIslandBackground(
+                cornerRadius: 24,
+                shadowRadius: 20,
+                topAttached: hasNotch
+            )
+        )
         .accessibilityElement(children: .contain)
     }
 }
@@ -412,7 +458,7 @@ private struct StatusBadge: View {
                 }
 
             Text(status.label)
-                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .font(.system(size: 11, weight: .medium, design: .rounded))
                 .foregroundStyle(.white.opacity(0.92))
                 .lineLimit(1)
                 .minimumScaleFactor(0.78)
@@ -435,7 +481,7 @@ private struct QuotaBadge: View {
             }
 
             Text(remainingPercent.map { "\($0)% left" } ?? "—")
-                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(quotaColor)
         }
@@ -479,7 +525,6 @@ private struct UsageRowView: View {
         }
         .padding(.horizontal, 9)
         .padding(.vertical, 6)
-        .background(.white.opacity(0.045), in: RoundedRectangle(cornerRadius: 9))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
             "\(row.label), \(row.remainingPercent) percent remaining, \(resetLabel)\(isStale ? ", stale" : "")"
@@ -519,5 +564,213 @@ extension AppDisplayStatus {
         case .approval: .orange
         case .failed: .red
         }
+    }
+}
+
+private struct NotchIslandBackground: View {
+    let cornerRadius: CGFloat
+    let shadowRadius: CGFloat
+    var topAttached = true
+
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    @ViewBuilder
+    var body: some View {
+        if topAttached {
+            surface(
+                UnevenRoundedRectangle(
+                    topLeadingRadius: 0,
+                    bottomLeadingRadius: cornerRadius,
+                    bottomTrailingRadius: cornerRadius,
+                    topTrailingRadius: 0,
+                    style: .continuous
+                )
+            )
+        } else {
+            surface(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            )
+        }
+    }
+
+    private func surface<S: InsettableShape>(_ shape: S) -> some View {
+        ZStack {
+            if reduceTransparency {
+                shape.fill(.black)
+            } else {
+                shape.fill(.regularMaterial)
+                shape.fill(
+                    LinearGradient(
+                        colors: [
+                            .black.opacity(0.97),
+                            Color(red: 0.035, green: 0.043, blue: 0.060).opacity(0.91),
+                            Color(red: 0.055, green: 0.063, blue: 0.090).opacity(0.86),
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                shape.fill(
+                    LinearGradient(
+                        colors: [
+                            .clear,
+                            .indigo.opacity(0.07),
+                            .cyan.opacity(0.035),
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+            }
+        }
+        .overlay {
+            shape.strokeBorder(
+                LinearGradient(
+                    colors: borderColors,
+                    startPoint: .top,
+                    endPoint: .bottom
+                ),
+                lineWidth: 1
+            )
+        }
+        .shadow(
+            color: .black.opacity(reduceTransparency ? 0.30 : 0.24),
+            radius: shadowRadius,
+            y: 7
+        )
+    }
+
+    private var borderColors: [Color] {
+        if topAttached {
+            return [
+                .clear,
+                .white.opacity(0.050),
+                .white.opacity(0.025),
+            ]
+        }
+        return [
+            .white.opacity(reduceTransparency ? 0.10 : 0.16),
+            .white.opacity(0.055),
+            .white.opacity(0.025),
+        ]
+    }
+}
+
+private struct SoftMaterialCardBackground: View {
+    let cornerRadius: CGFloat
+    let tint: Color
+
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+
+        ZStack {
+            if reduceTransparency {
+                shape.fill(Color(white: 0.10))
+            } else {
+                shape.fill(.regularMaterial)
+                shape.fill(.black.opacity(0.28))
+                shape.fill(
+                    LinearGradient(
+                        colors: [tint.opacity(0.055), .clear],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+            }
+        }
+        .overlay {
+            shape.strokeBorder(.white.opacity(0.065), lineWidth: 0.8)
+        }
+    }
+}
+
+private struct AdaptiveGlassButtonModifier: ViewModifier {
+    let prominent: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(macOS 26, *) {
+            if prominent {
+                content.buttonStyle(.glassProminent)
+            } else {
+                content.buttonStyle(.glass)
+            }
+        } else if prominent {
+            content.buttonStyle(.borderedProminent)
+        } else {
+            content.buttonStyle(.bordered)
+        }
+    }
+}
+
+private struct AdaptiveFloatingGlassModifier: ViewModifier {
+    let cornerRadius: CGFloat
+
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(macOS 26, *), !reduceTransparency {
+            content.glassEffect(
+                .regular.tint(.black.opacity(0.32)).interactive(),
+                in: .rect(cornerRadius: cornerRadius)
+            )
+        } else {
+            content.background(
+                NotchIslandBackground(
+                    cornerRadius: cornerRadius,
+                    shadowRadius: 14,
+                    topAttached: false
+                )
+            )
+        }
+    }
+}
+
+private struct PetHaloModifier: ViewModifier {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    func body(content: Content) -> some View {
+        content.background {
+            if !reduceTransparency {
+                RadialGradient(
+                    colors: [
+                        .white.opacity(0.075),
+                        .cyan.opacity(0.035),
+                        .clear,
+                    ],
+                    center: .center,
+                    startRadius: 2,
+                    endRadius: 42
+                )
+                .blur(radius: 4)
+                .allowsHitTesting(false)
+            }
+        }
+    }
+}
+
+private extension View {
+    func softMaterialCard(
+        cornerRadius: CGFloat,
+        tint: Color
+    ) -> some View {
+        background(
+            SoftMaterialCardBackground(cornerRadius: cornerRadius, tint: tint)
+        )
+    }
+
+    func adaptiveGlassButton(prominent: Bool = false) -> some View {
+        modifier(AdaptiveGlassButtonModifier(prominent: prominent))
+    }
+
+    func adaptiveFloatingGlass(cornerRadius: CGFloat) -> some View {
+        modifier(AdaptiveFloatingGlassModifier(cornerRadius: cornerRadius))
+    }
+
+    func petHalo() -> some View {
+        modifier(PetHaloModifier())
     }
 }

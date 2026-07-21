@@ -50,6 +50,7 @@ is explicit and visibly labeled:
 - connection, stale state, and Codex RTT;
 - a hover-revealed notch island plus no-notch capsule fallback;
 - hidden, hover-compact, and pinned-expanded presentation states;
+- restrained macOS 26 Liquid Glass controls with material fallbacks on macOS 14–15;
 - single-click wave, double-click jump, and panel-local pointer gaze;
 - outside-click, Escape, and explicit-button collapse back into the notch;
 - a `Talk to pet` text composer that opens a reviewable prompt in Codex;
