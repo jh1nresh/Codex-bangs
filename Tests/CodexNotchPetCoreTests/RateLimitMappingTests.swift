@@ -19,7 +19,14 @@ final class RateLimitMappingTests: XCTestCase {
         XCTAssertEqual(collapsed.role, .secondary)
         XCTAssertEqual(collapsed.remainingPercent, 82)
         XCTAssertTrue(collapsed.isWeekly)
-        XCTAssertEqual(RateLimitMapper.label(for: collapsed, in: buckets[0]), "Weekly")
+        XCTAssertEqual(
+            RateLimitMapper.label(for: collapsed, in: buckets[0]),
+            "Codex · Weekly"
+        )
+        XCTAssertEqual(
+            RateLimitMapper.label(for: buckets[1].windows[0], in: buckets[1]),
+            "Other metered use"
+        )
     }
 
     func testAbsentWindowDoesNotBecomeOneHundredPercent() throws {

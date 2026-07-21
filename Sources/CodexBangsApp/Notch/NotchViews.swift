@@ -63,6 +63,14 @@ struct NotchRootView: View {
                 onToggleExpanded()
             }
         }
+        .dropDestination(for: URL.self) { urls, _ in
+            guard let packageURL = urls.first(where: {
+                $0.pathExtension.caseInsensitiveCompare("codexpet") == .orderedSame
+            }) else {
+                return false
+            }
+            return model.importPetPackage(at: packageURL)
+        }
     }
 }
 
@@ -381,9 +389,17 @@ private struct ExpandedNotchView: View {
             .softMaterialCard(cornerRadius: 14, tint: .indigo)
 
             VStack(alignment: .leading, spacing: 6) {
-                Text("Usage")
-                    .font(.system(size: 10, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.secondary)
+                HStack(spacing: 6) {
+                    Text("Usage")
+                        .font(.system(size: 10, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.secondary)
+
+                    if model.isPreviewMode {
+                        Text("Demo data")
+                            .font(.system(size: 8, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.yellow)
+                    }
+                }
 
                 if model.usageRows.isEmpty {
                     Text("No usage windows available")

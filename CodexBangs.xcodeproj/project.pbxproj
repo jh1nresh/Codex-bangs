@@ -8,23 +8,31 @@
 
 /* Begin PBXBuildFile section */
 		03590A72BB049BFD98E05081 /* PetSpriteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A254CC296B69E8943965623C /* PetSpriteView.swift */; };
+		0B0228E82424701282B49293 /* PetPackageInstaller.swift in Sources */ = {isa = PBXBuildFile; fileRef = E48E84088C359C3672998598 /* PetPackageInstaller.swift */; };
 		1398F1F91F8C936DBB698469 /* PetLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BDAC7F905A16DAB60E6290E /* PetLibrary.swift */; };
 		1463E7053C761BA1E3462E43 /* PetContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7825E249616B8B02F868694C /* PetContract.swift */; };
+		16945E66B745D5CD3EBF6ADD /* CodexDesktopLauncher.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8DE8071A842DA1755D83B5E /* CodexDesktopLauncher.swift */; };
 		173C3506C0C9FE451A845269 /* CodexNotchPetCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EF27F63A0A1E3B4821F1971A /* CodexNotchPetCore.framework */; };
 		1A0C557AFC26D4787A83AC60 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46ACEDA5FBCC952501AAA9CD /* AppDelegate.swift */; };
+		1AA33F475E63F3DB8EBF7B97 /* PetCreationPrompt.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5774F95DC21825AE7C4EB33 /* PetCreationPrompt.swift */; };
 		22EE68A42BADAA889F324954 /* NotchGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE355633C1ABF254D55FE4C4 /* NotchGeometry.swift */; };
 		23FE58A27F38DFEA5E5412BB /* CodexAppServerClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E13D7393023E5166BFCE1A4 /* CodexAppServerClient.swift */; };
 		4E9493CE84A2457588E8B3CE /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F602124475036A0527947294 /* SettingsView.swift */; };
 		5AA2AE1CE1692FD2B40A0070 /* NotchViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5EC7A7170E3608D9BEB1938 /* NotchViews.swift */; };
+		69D29016407B911E7DCB31F1 /* BundledSkills in Resources */ = {isa = PBXBuildFile; fileRef = B488434CFA477925B8D99EF2 /* BundledSkills */; };
+		759A3064023A030AA4B4F729 /* HatchPetSkillInstaller.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52B204228157C973829A5D6D /* HatchPetSkillInstaller.swift */; };
 		7FA84873B8BAF00565252A34 /* ProtocolModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 354762ACFDEA7821976585BC /* ProtocolModels.swift */; };
 		842A18CC9B55626FAAD51039 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD2D27A21915DEEFF003145F /* AppModel.swift */; };
 		8A6AA90A4709D1AEC910B238 /* NotchPanelController.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB30854D7C5FB03A8BD03941 /* NotchPanelController.swift */; };
+		8C8FFE805C512F974E38C866 /* PetPackageType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3ACE4081FC68557E6C26AC08 /* PetPackageType.swift */; };
+		8E4F4E322CAEF4AA522025AA /* PetCreatorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45706627812EA1C773AA3ABD /* PetCreatorView.swift */; };
 		955BE9FBDE64952F5B54CC51 /* CodexBangsApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 839F16D6C35700952A153BA0 /* CodexBangsApp.swift */; };
 		A44D05AC8882D7DA024B2509 /* CodexExecutableLocator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 047EFD824716F52BA6690DF8 /* CodexExecutableLocator.swift */; };
 		ABA260057840E45A0084AAB2 /* CodexDesktopAppVerifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9CC0087EAC1807313D94524 /* CodexDesktopAppVerifier.swift */; };
 		B7519E45A9637177B66F1256 /* CodexDesktopHandoff.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB59370A60C4C52ED50EB786 /* CodexDesktopHandoff.swift */; };
 		CB2D7ACD53E6442C1FEECCF0 /* CodexNotchPetCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = EF27F63A0A1E3B4821F1971A /* CodexNotchPetCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		D2B831DF2898EB10820DBEA2 /* CodexMonitorReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75C007D690BC64D0FB2E59C9 /* CodexMonitorReader.swift */; };
+		DF73F1C0D5C8D0E4100F6AE0 /* BuiltInPetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9A9E7DBA71EF876B7C34CE0 /* BuiltInPetView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -55,19 +63,27 @@
 		047EFD824716F52BA6690DF8 /* CodexExecutableLocator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexExecutableLocator.swift; sourceTree = "<group>"; };
 		1E13D7393023E5166BFCE1A4 /* CodexAppServerClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexAppServerClient.swift; sourceTree = "<group>"; };
 		354762ACFDEA7821976585BC /* ProtocolModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtocolModels.swift; sourceTree = "<group>"; };
+		3ACE4081FC68557E6C26AC08 /* PetPackageType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PetPackageType.swift; sourceTree = "<group>"; };
+		45706627812EA1C773AA3ABD /* PetCreatorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PetCreatorView.swift; sourceTree = "<group>"; };
 		46ACEDA5FBCC952501AAA9CD /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		52B204228157C973829A5D6D /* HatchPetSkillInstaller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HatchPetSkillInstaller.swift; sourceTree = "<group>"; };
 		6BDAC7F905A16DAB60E6290E /* PetLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PetLibrary.swift; sourceTree = "<group>"; };
 		75C007D690BC64D0FB2E59C9 /* CodexMonitorReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexMonitorReader.swift; sourceTree = "<group>"; };
 		7825E249616B8B02F868694C /* PetContract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PetContract.swift; sourceTree = "<group>"; };
 		839F16D6C35700952A153BA0 /* CodexBangsApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexBangsApp.swift; sourceTree = "<group>"; };
 		86E82397A280917B992E9013 /* CodexBangs.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CodexBangs.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A254CC296B69E8943965623C /* PetSpriteView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PetSpriteView.swift; sourceTree = "<group>"; };
+		A8DE8071A842DA1755D83B5E /* CodexDesktopLauncher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexDesktopLauncher.swift; sourceTree = "<group>"; };
 		AB59370A60C4C52ED50EB786 /* CodexDesktopHandoff.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexDesktopHandoff.swift; sourceTree = "<group>"; };
+		B488434CFA477925B8D99EF2 /* BundledSkills */ = {isa = PBXFileReference; lastKnownFileType = folder; name = BundledSkills; path = Resources/BundledSkills; sourceTree = SOURCE_ROOT; };
 		C5EC7A7170E3608D9BEB1938 /* NotchViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchViews.swift; sourceTree = "<group>"; };
+		C9A9E7DBA71EF876B7C34CE0 /* BuiltInPetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuiltInPetView.swift; sourceTree = "<group>"; };
 		CD2D27A21915DEEFF003145F /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		E48E84088C359C3672998598 /* PetPackageInstaller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PetPackageInstaller.swift; sourceTree = "<group>"; };
 		E9CC0087EAC1807313D94524 /* CodexDesktopAppVerifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexDesktopAppVerifier.swift; sourceTree = "<group>"; };
 		EB30854D7C5FB03A8BD03941 /* NotchPanelController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchPanelController.swift; sourceTree = "<group>"; };
 		EF27F63A0A1E3B4821F1971A /* CodexNotchPetCore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = CodexNotchPetCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		F5774F95DC21825AE7C4EB33 /* PetCreationPrompt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PetCreationPrompt.swift; sourceTree = "<group>"; };
 		F602124475036A0527947294 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		FE355633C1ABF254D55FE4C4 /* NotchGeometry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchGeometry.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -87,6 +103,7 @@
 		032D10ADAA9E8A96F388B1E9 = {
 			isa = PBXGroup;
 			children = (
+				B488434CFA477925B8D99EF2 /* BundledSkills */,
 				9A49A50CC3908D073EDC9495 /* CodexBangsApp */,
 				321A0C4E2789D05AD1B4D36B /* CodexNotchPetCore */,
 				140C292F90A9216A7D630FE3 /* Products */,
@@ -109,9 +126,12 @@
 				AB59370A60C4C52ED50EB786 /* CodexDesktopHandoff.swift */,
 				047EFD824716F52BA6690DF8 /* CodexExecutableLocator.swift */,
 				75C007D690BC64D0FB2E59C9 /* CodexMonitorReader.swift */,
+				52B204228157C973829A5D6D /* HatchPetSkillInstaller.swift */,
 				FE355633C1ABF254D55FE4C4 /* NotchGeometry.swift */,
 				7825E249616B8B02F868694C /* PetContract.swift */,
+				F5774F95DC21825AE7C4EB33 /* PetCreationPrompt.swift */,
 				6BDAC7F905A16DAB60E6290E /* PetLibrary.swift */,
+				E48E84088C359C3672998598 /* PetPackageInstaller.swift */,
 				354762ACFDEA7821976585BC /* ProtocolModels.swift */,
 			);
 			name = CodexNotchPetCore;
@@ -125,6 +145,7 @@
 				CD2D27A21915DEEFF003145F /* AppModel.swift */,
 				839F16D6C35700952A153BA0 /* CodexBangsApp.swift */,
 				E9CC0087EAC1807313D94524 /* CodexDesktopAppVerifier.swift */,
+				A8DE8071A842DA1755D83B5E /* CodexDesktopLauncher.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -132,6 +153,8 @@
 		9381FBD24D83514AC89DEAE4 /* Pet */ = {
 			isa = PBXGroup;
 			children = (
+				C9A9E7DBA71EF876B7C34CE0 /* BuiltInPetView.swift */,
+				3ACE4081FC68557E6C26AC08 /* PetPackageType.swift */,
 				A254CC296B69E8943965623C /* PetSpriteView.swift */,
 			);
 			path = Pet;
@@ -161,6 +184,7 @@
 		B9C7F6F467A6E6D9A0F07098 /* Settings */ = {
 			isa = PBXGroup;
 			children = (
+				45706627812EA1C773AA3ABD /* PetCreatorView.swift */,
 				F602124475036A0527947294 /* SettingsView.swift */,
 			);
 			path = Settings;
@@ -174,6 +198,7 @@
 			buildConfigurationList = 3950815A5883FE7B2C39A2D3 /* Build configuration list for PBXNativeTarget "CodexBangs" */;
 			buildPhases = (
 				05DF64A55790054497592DF8 /* Sources */,
+				33A9E86DE021E576F9EBCF7D /* Resources */,
 				B6B6AF535C636C7061B24E76 /* Frameworks */,
 				E27BDFED28D3A4E4612FDD68 /* Embed Frameworks */,
 			);
@@ -237,6 +262,17 @@
 		};
 /* End PBXProject section */
 
+/* Begin PBXResourcesBuildPhase section */
+		33A9E86DE021E576F9EBCF7D /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				69D29016407B911E7DCB31F1 /* BundledSkills in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
 		05DF64A55790054497592DF8 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
@@ -244,10 +280,14 @@
 			files = (
 				1A0C557AFC26D4787A83AC60 /* AppDelegate.swift in Sources */,
 				842A18CC9B55626FAAD51039 /* AppModel.swift in Sources */,
+				DF73F1C0D5C8D0E4100F6AE0 /* BuiltInPetView.swift in Sources */,
 				955BE9FBDE64952F5B54CC51 /* CodexBangsApp.swift in Sources */,
 				ABA260057840E45A0084AAB2 /* CodexDesktopAppVerifier.swift in Sources */,
+				16945E66B745D5CD3EBF6ADD /* CodexDesktopLauncher.swift in Sources */,
 				8A6AA90A4709D1AEC910B238 /* NotchPanelController.swift in Sources */,
 				5AA2AE1CE1692FD2B40A0070 /* NotchViews.swift in Sources */,
+				8E4F4E322CAEF4AA522025AA /* PetCreatorView.swift in Sources */,
+				8C8FFE805C512F974E38C866 /* PetPackageType.swift in Sources */,
 				03590A72BB049BFD98E05081 /* PetSpriteView.swift in Sources */,
 				4E9493CE84A2457588E8B3CE /* SettingsView.swift in Sources */,
 			);
@@ -261,9 +301,12 @@
 				B7519E45A9637177B66F1256 /* CodexDesktopHandoff.swift in Sources */,
 				A44D05AC8882D7DA024B2509 /* CodexExecutableLocator.swift in Sources */,
 				D2B831DF2898EB10820DBEA2 /* CodexMonitorReader.swift in Sources */,
+				759A3064023A030AA4B4F729 /* HatchPetSkillInstaller.swift in Sources */,
 				22EE68A42BADAA889F324954 /* NotchGeometry.swift in Sources */,
 				1463E7053C761BA1E3462E43 /* PetContract.swift in Sources */,
+				1AA33F475E63F3DB8EBF7B97 /* PetCreationPrompt.swift in Sources */,
 				1398F1F91F8C936DBB698469 /* PetLibrary.swift in Sources */,
+				0B0228E82424701282B49293 /* PetPackageInstaller.swift in Sources */,
 				7FA84873B8BAF00565252A34 /* ProtocolModels.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -284,12 +327,15 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 2;
 				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = Sources/CodexBangsApp/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
+				MARKETING_VERSION = 0.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = io.jeezlabs.CodexBangs;
 				PRODUCT_NAME = "Codex-bangs";
 				SDKROOT = macosx;
@@ -301,12 +347,15 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 2;
 				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = Sources/CodexBangsApp/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
+				MARKETING_VERSION = 0.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = io.jeezlabs.CodexBangs;
 				PRODUCT_NAME = "Codex-bangs";
 				SDKROOT = macosx;

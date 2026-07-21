@@ -13,6 +13,7 @@ struct PetSpriteView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var spriteSheet: PetSpriteSheet?
     @State private var hoverFrame: HoverFrame?
+    @State private var gaze = CGVector.zero
     @State private var animationStartedAt = Date.now
 
     var body: some View {
@@ -61,7 +62,7 @@ struct PetSpriteView: View {
         }
         .help("Click to wave · Double-click to play")
         .accessibilityRepresentation {
-            Button(package?.manifest.displayName ?? "Codex pet", action: onSingleClick)
+            Button(package?.manifest.displayName ?? "Bloop", action: onSingleClick)
                 .accessibilityHint("Press to wave. Double-press to play.")
                 .accessibilityAction(named: "Wave", onSingleClick)
                 .accessibilityAction(named: "Play", onDoubleClick)
@@ -77,20 +78,7 @@ struct PetSpriteView: View {
     }
 
     private var fallback: some View {
-        ZStack {
-            Circle()
-                .fill(
-                    LinearGradient(
-                        colors: [.cyan.opacity(0.85), .indigo.opacity(0.9)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-            Image(systemName: "pawprint.fill")
-                .font(.system(size: 22, weight: .bold))
-                .foregroundStyle(.white)
-        }
-        .padding(7)
+        BuiltInPetView(animation: animation, gaze: gaze)
     }
 
     private func frameIndex(at date: Date, frameCount: Int) -> Int {
@@ -130,17 +118,24 @@ struct PetSpriteView: View {
     private func updateHover(_ phase: HoverPhase, in size: CGSize) {
         guard !reduceMotion else {
             hoverFrame = nil
+            gaze = .zero
             return
         }
 
         switch phase {
         case .ended:
             hoverFrame = nil
+            gaze = .zero
         case .active(let location):
             let dx = location.x - size.width / 2
             let dy = location.y - size.height / 2
+            gaze = CGVector(
+                dx: dx / max(size.width / 2, 1),
+                dy: dy / max(size.height / 2, 1)
+            )
             guard abs(dx) + abs(dy) > 2 else {
                 hoverFrame = nil
+                gaze = .zero
                 return
             }
 

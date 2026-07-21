@@ -38,6 +38,7 @@ public struct PetAnimationRow: Equatable, Sendable {
 }
 
 public enum PetV2Contract {
+    public static let builtInPetIdentifier = "built-in-bloop"
     public static let spriteVersionNumber = 2
     public static let columns = 8
     public static let rows = 11
@@ -129,6 +130,7 @@ public struct PetPackageManifest: Decodable, Equatable, Sendable {
 
 public enum PetPackageValidationError: Error, Equatable, Sendable {
     case missingIdentifier
+    case reservedIdentifier
     case unsupportedSpriteVersion(Int)
     case unsafeSpritesheetPath
 }
@@ -137,6 +139,9 @@ public enum PetPackageValidator {
     public static func validate(_ manifest: PetPackageManifest) throws {
         guard !manifest.id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw PetPackageValidationError.missingIdentifier
+        }
+        guard manifest.id != PetV2Contract.builtInPetIdentifier else {
+            throw PetPackageValidationError.reservedIdentifier
         }
         guard manifest.spriteVersionNumber == PetV2Contract.spriteVersionNumber else {
             throw PetPackageValidationError.unsupportedSpriteVersion(manifest.spriteVersionNumber)
