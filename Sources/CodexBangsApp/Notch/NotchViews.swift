@@ -5,6 +5,7 @@ import SwiftUI
 struct NotchRootView: View {
     @Bindable var model: AppModel
     let centerGap: CGFloat
+    let notchSize: CGSize
     let hasNotch: Bool
     let onToggleExpanded: () -> Void
     let onHoverChanged: (Bool) -> Void
@@ -17,59 +18,40 @@ struct NotchRootView: View {
 
     var body: some View {
         Group {
-            if model.isExpanded {
-                ExpandedNotchView(
-                    model: model,
-                    centerGap: centerGap,
-                    hasNotch: hasNotch,
-                    onCollapse: onToggleExpanded,
-                    onRefresh: onRefresh,
-                    onOpenInCodex: onOpenInCodex,
-                    onSettings: onSettings,
-                    onQuit: onQuit
-                )
-                .transition(
-                    .asymmetric(
-                        insertion: .opacity.combined(with: .move(edge: .top)),
-                        removal: .opacity
+            if hasNotch {
+                GeometryReader { proxy in
+                    let visibleSize = silhouetteSize(in: proxy.size)
+                    let silhouette = NotchSilhouetteShape(
+                        visibleSize: visibleSize,
+                        cornerRadius: 24
                     )
-                )
-            } else if hasNotch && model.isNotchRevealed {
-                CompactNotchView(
-                    model: model,
-                    centerGap: centerGap,
-                    onExpand: onToggleExpanded
-                )
-                .transition(
-                    .asymmetric(
-                        insertion: .opacity.combined(with: .move(edge: .top)),
-                        removal: .opacity
-                    )
-                )
-            } else if !hasNotch {
-                NoNotchPillView(
-                    model: model,
-                    centerGap: centerGap,
-                    onExpand: onToggleExpanded
-                )
+                    ZStack(alignment: .top) {
+                        NotchIslandBackground(
+                            cornerRadius: 24,
+                            shadowRadius: model.isNotchRevealed ? 18 : 0,
+                            visibleSize: visibleSize
+                        )
+                        .animation(shellAnimation, value: visibleSize)
+                        .allowsHitTesting(false)
+
+                        presentationContent
+                            .mask {
+                                silhouette
+                                .fill(.white)
+                                .animation(shellAnimation, value: visibleSize)
+                            }
+                    }
+                    .contentShape(silhouette)
+                    .onHover(perform: onHoverChanged)
+                }
             } else {
-                Rectangle()
-                    .fill(.clear)
+                presentationContent
                     .contentShape(Rectangle())
+                    .onHover(perform: onHoverChanged)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .contentShape(Rectangle())
-        .onHover(perform: onHoverChanged)
         .environment(\.colorScheme, .dark)
-        .animation(
-            reduceMotion ? nil : .smooth(duration: 0.38, extraBounce: 0.0),
-            value: model.isExpanded
-        )
-        .animation(
-            reduceMotion ? nil : .smooth(duration: 0.38, extraBounce: 0.0),
-            value: model.isNotchRevealed
-        )
         .onExitCommand {
             if model.isExpanded {
                 onToggleExpanded()
@@ -83,6 +65,79 @@ struct NotchRootView: View {
             }
             return model.importPetPackage(at: packageURL)
         }
+    }
+
+    @ViewBuilder
+    private var presentationContent: some View {
+        if model.isExpanded {
+            ExpandedNotchView(
+                model: model,
+                centerGap: centerGap,
+                hasNotch: hasNotch,
+                onCollapse: onToggleExpanded,
+                onRefresh: onRefresh,
+                onOpenInCodex: onOpenInCodex,
+                onSettings: onSettings,
+                onQuit: onQuit
+            )
+            .transition(contentTransition)
+        } else if hasNotch && model.isNotchRevealed {
+            CompactNotchView(
+                model: model,
+                centerGap: centerGap,
+                onExpand: onToggleExpanded
+            )
+            .transition(contentTransition)
+        } else if !hasNotch {
+            NoNotchPillView(
+                model: model,
+                centerGap: centerGap,
+                onExpand: onToggleExpanded
+            )
+        } else {
+            Rectangle()
+                .fill(.clear)
+                .contentShape(Rectangle())
+        }
+    }
+
+    private var shellAnimation: Animation? {
+        guard !reduceMotion else { return nil }
+        if model.isNotchRevealed || model.isExpanded {
+            return .spring(
+                response: NotchMotion.revealResponse,
+                dampingFraction: NotchMotion.revealDamping
+            )
+        }
+        return .smooth(duration: NotchMotion.collapseSeconds, extraBounce: 0)
+    }
+
+    private var contentTransition: AnyTransition {
+        guard !reduceMotion else { return .identity }
+        return .asymmetric(
+            insertion: .offset(y: -8)
+                .combined(with: .opacity)
+                .animation(.easeOut(duration: 0.18).delay(0.08)),
+            removal: .offset(y: -4)
+                .combined(with: .opacity)
+                .animation(.easeOut(duration: 0.10))
+        )
+    }
+
+    private func silhouetteSize(in containerSize: CGSize) -> CGSize {
+        let desiredSize: CGSize
+        if model.isExpanded {
+            desiredSize = containerSize
+        } else if model.isNotchRevealed {
+            desiredSize = NotchPanelMetrics.productDefault.collapsedSize
+        } else {
+            desiredSize = notchSize
+        }
+
+        return CGSize(
+            width: min(max(0, desiredSize.width), containerSize.width),
+            height: min(max(0, desiredSize.height), containerSize.height)
+        )
     }
 }
 
@@ -174,7 +229,6 @@ private struct CompactNotchView: View {
         .padding(.top, 7)
         .padding(.bottom, 10)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(NotchIslandBackground(cornerRadius: 24, shadowRadius: 18))
         .accessibilityElement(children: .contain)
     }
 
@@ -503,13 +557,15 @@ private struct ExpandedNotchView: View {
         .padding(.top, hasNotch ? 7 : 10)
         .padding(.bottom, 12)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(
-            NotchIslandBackground(
-                cornerRadius: 24,
-                shadowRadius: 20,
-                topAttached: hasNotch
-            )
-        )
+        .background {
+            if !hasNotch {
+                NotchIslandBackground(
+                    cornerRadius: 24,
+                    shadowRadius: 20,
+                    topAttached: false
+                )
+            }
+        }
         .accessibilityElement(children: .contain)
     }
 
@@ -706,16 +762,82 @@ extension AppDisplayStatus {
     }
 }
 
+private struct NotchSilhouetteShape: InsettableShape {
+    var visibleSize: CGSize
+    var cornerRadius: CGFloat
+    private var insetAmount: CGFloat = 0
+
+    init(visibleSize: CGSize, cornerRadius: CGFloat) {
+        self.visibleSize = visibleSize
+        self.cornerRadius = cornerRadius
+    }
+
+    var animatableData: AnimatablePair<CGFloat, AnimatablePair<CGFloat, CGFloat>> {
+        get {
+            AnimatablePair(
+                visibleSize.width,
+                AnimatablePair(visibleSize.height, cornerRadius)
+            )
+        }
+        set {
+            visibleSize.width = newValue.first
+            visibleSize.height = newValue.second.first
+            cornerRadius = newValue.second.second
+        }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        let availableWidth = max(0, rect.width - insetAmount * 2)
+        let availableHeight = max(0, rect.height - insetAmount * 2)
+        let width = min(max(0, visibleSize.width - insetAmount * 2), availableWidth)
+        let height = min(max(0, visibleSize.height - insetAmount * 2), availableHeight)
+        guard width > 0, height > 0 else { return Path() }
+
+        let radius = min(
+            max(0, cornerRadius - insetAmount),
+            min(width, height) / 2
+        )
+        let silhouetteRect = CGRect(
+            x: rect.midX - width / 2,
+            y: rect.minY + insetAmount,
+            width: width,
+            height: height
+        )
+        return UnevenRoundedRectangle(
+            topLeadingRadius: 0,
+            bottomLeadingRadius: radius,
+            bottomTrailingRadius: radius,
+            topTrailingRadius: 0,
+            style: .continuous
+        )
+        .path(in: silhouetteRect)
+    }
+
+    func inset(by amount: CGFloat) -> NotchSilhouetteShape {
+        var copy = self
+        copy.insetAmount += amount
+        return copy
+    }
+}
+
 private struct NotchIslandBackground: View {
     let cornerRadius: CGFloat
     let shadowRadius: CGFloat
     var topAttached = true
+    var visibleSize: CGSize? = nil
 
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     @ViewBuilder
     var body: some View {
-        if topAttached {
+        if topAttached, let visibleSize {
+            surface(
+                NotchSilhouetteShape(
+                    visibleSize: visibleSize,
+                    cornerRadius: cornerRadius
+                )
+            )
+        } else if topAttached {
             surface(
                 UnevenRoundedRectangle(
                     topLeadingRadius: 0,
