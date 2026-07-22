@@ -592,7 +592,8 @@ private struct ExpandedNotchView: View {
                     .adaptiveGlassButton(prominent: true)
 
                     Button {
-                        startVoice(.guide)
+                        model.taskDraft = ""
+                        model.guideMe()
                     } label: {
                         Label("Look & guide", systemImage: "eye.fill")
                     }

@@ -250,7 +250,7 @@ struct SettingsView: View {
             settingsGroup("Privacy", systemImage: "hand.raised.fill", tint: .mint) {
                 Toggle("Hide task names and locations", isOn: $model.privacyMode)
 
-                Text("Codex-bangs reads thread-list summary metadata. The microphone turns on only after you start a voice question, uses supported on-device speech recognition, and stops when you finish, cancel, or close the notch. Voice Ask sends the transcript plus the active role and selected skill invocation through local Codex. Look & guide captures one screenshot only after you confirm the transcript and click it, then deletes the private temporary file. It never listens or watches continuously, and never controls the computer.")
+                Text("Codex-bangs reads thread-list summary metadata. The microphone turns on only after you start a voice question, uses supported on-device speech recognition, and stops when you finish, cancel, or close the notch. Voice Ask sends the transcript plus the active role and selected skill invocation through local Codex. Look & guide captures one screenshot only when you click it, then deletes the private temporary file. It never listens or watches continuously, and never controls the computer.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 

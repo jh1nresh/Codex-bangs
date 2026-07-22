@@ -11,7 +11,7 @@ usage windows, recent-task metadata, stale/offline handling, settings, and local
 Codex v2 pets. `⌃⌥Space` summons Talk to pet and starts an explicit voice
 question. The on-device transcript is shown for review before `Voice Ask`
 creates a persisted Codex task in a read-only filesystem sandbox. `Look & guide`
-takes a single explicit screenshot only after confirmation, sends it through
+takes a single explicit screenshot only when clicked, sends it through
 Codex, and removes the local image after the ephemeral response. On a notched
 display the resting surface is invisible; hovering
 the camera area reveals a compact black island with the pet inside it, and

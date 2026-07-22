@@ -53,9 +53,10 @@ Those rejected features add standing authority or ambient collection. The
 implemented assistant path is deliberately user-triggered and bounded: the app
 records only after an explicit action, requires on-device recognition, stops on
 finish, cancel, timeout, or collapse, and lets the user review the transcript.
-Codex receives that transcript, the active role and selected skill invocation,
-plus one attached screenshot only for `Look & guide`. The filesystem is read-only, screen
-guidance is ephemeral, and Codex-bangs exposes Stop but no approval button.
+`Voice Ask` sends that transcript with the active role and selected skill invocation.
+`Look & guide` runs directly with a default guidance request, or uses the reviewed
+transcript as its question, and attaches exactly one screenshot. The filesystem is
+read-only, screen guidance is ephemeral, and Codex-bangs exposes Stop but no approval button.
 Direct tasks use `--ignore-user-config`, so configured plugins and MCP servers are
 not loaded; `Open in Codex` remains the explicit path for using them.
 
