@@ -3,12 +3,12 @@ import Foundation
 public struct NotchPanelMetrics: Equatable, Sendable {
     public static let productDefault = NotchPanelMetrics(
         collapsedSize: CGSize(width: 440, height: 180),
-        expandedSize: CGSize(width: 440, height: 370)
+        expandedSize: CGSize(width: 440, height: 430)
     )
 
     public static let noNotchDefault = NotchPanelMetrics(
         collapsedSize: CGSize(width: 420, height: 52),
-        expandedSize: CGSize(width: 440, height: 370)
+        expandedSize: CGSize(width: 520, height: 430)
     )
 
     public let collapsedSize: CGSize

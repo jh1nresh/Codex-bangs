@@ -40,6 +40,7 @@ targets:
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         LSUIElement: true
         NSHighResolutionCapable: true
+        NSScreenCaptureUsageDescription: Codex-bangs captures the display under your pointer only when you click Guide me, sends it through Codex for guidance, and deletes the temporary image after the response.
         NSPrefersDisplaySafeAreaCompatibilityMode: false
         UTExportedTypeDeclarations:
           - UTTypeIdentifier: io.jeezlabs.codexbangs.pet-package

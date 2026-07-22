@@ -5,6 +5,7 @@ import SwiftUI
 struct NotchRootView: View {
     @Bindable var model: AppModel
     let centerGap: CGFloat
+    let notchSize: CGSize
     let hasNotch: Bool
     let onToggleExpanded: () -> Void
     let onHoverChanged: (Bool) -> Void
@@ -17,47 +18,42 @@ struct NotchRootView: View {
 
     var body: some View {
         Group {
-            if model.isExpanded {
-                ExpandedNotchView(
-                    model: model,
-                    centerGap: centerGap,
-                    hasNotch: hasNotch,
-                    onCollapse: onToggleExpanded,
-                    onRefresh: onRefresh,
-                    onOpenInCodex: onOpenInCodex,
-                    onSettings: onSettings,
-                    onQuit: onQuit
-                )
-            } else if hasNotch && model.isNotchRevealed {
-                CompactNotchView(
-                    model: model,
-                    centerGap: centerGap,
-                    onExpand: onToggleExpanded
-                )
-            } else if !hasNotch {
-                NoNotchPillView(
-                    model: model,
-                    centerGap: centerGap,
-                    onExpand: onToggleExpanded
-                )
+            if hasNotch {
+                GeometryReader { proxy in
+                    let visibleSize = silhouetteSize(in: proxy.size)
+                    let silhouette = NotchSilhouetteShape(
+                        visibleSize: visibleSize,
+                        topShoulder: topShoulder,
+                        bottomCornerRadius: bottomCornerRadius
+                    )
+                    ZStack(alignment: .top) {
+                        NotchIslandBackground(
+                            cornerRadius: 24,
+                            shadowRadius: 0,
+                            silhouette: silhouette
+                        )
+                        .animation(shellAnimation, value: visibleSize)
+                        .allowsHitTesting(false)
+
+                        presentationContent
+                            .mask {
+                                silhouette
+                                .fill(.white)
+                                .animation(shellAnimation, value: visibleSize)
+                            }
+                    }
+                    // Keep hover on the target shell while the visible path catches up.
+                    .contentShape(silhouette)
+                    .onHover(perform: onHoverChanged)
+                }
             } else {
-                Rectangle()
-                    .fill(.clear)
+                presentationContent
                     .contentShape(Rectangle())
+                    .onHover(perform: onHoverChanged)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .contentShape(Rectangle())
-        .onHover(perform: onHoverChanged)
         .environment(\.colorScheme, .dark)
-        .animation(
-            reduceMotion ? nil : .smooth(duration: 0.30, extraBounce: 0.03),
-            value: model.isExpanded
-        )
-        .animation(
-            reduceMotion ? nil : .smooth(duration: 0.30, extraBounce: 0.03),
-            value: model.isNotchRevealed
-        )
         .onExitCommand {
             if model.isExpanded {
                 onToggleExpanded()
@@ -71,6 +67,96 @@ struct NotchRootView: View {
             }
             return model.importPetPackage(at: packageURL)
         }
+    }
+
+    @ViewBuilder
+    private var presentationContent: some View {
+        if model.isExpanded {
+            ExpandedNotchView(
+                model: model,
+                centerGap: centerGap,
+                hasNotch: hasNotch,
+                onCollapse: onToggleExpanded,
+                onRefresh: onRefresh,
+                onOpenInCodex: onOpenInCodex,
+                onSettings: onSettings,
+                onQuit: onQuit
+            )
+            .transition(contentTransition)
+        } else if hasNotch && model.isNotchRevealed {
+            CompactNotchView(
+                model: model,
+                centerGap: centerGap,
+                onExpand: onToggleExpanded
+            )
+            .transition(contentTransition)
+        } else if !hasNotch {
+            NoNotchPillView(
+                model: model,
+                centerGap: centerGap,
+                onExpand: onToggleExpanded
+            )
+        } else {
+            Rectangle()
+                .fill(.clear)
+                .contentShape(Rectangle())
+        }
+    }
+
+    private var shellAnimation: Animation? {
+        guard !reduceMotion else { return nil }
+        if model.isNotchRevealed || model.isExpanded {
+            return .spring(
+                response: NotchMotion.revealResponse,
+                dampingFraction: NotchMotion.revealDamping
+            )
+        }
+        return .smooth(duration: NotchMotion.collapseSeconds, extraBounce: 0)
+    }
+
+    private var contentTransition: AnyTransition {
+        guard !reduceMotion else { return .identity }
+        return .asymmetric(
+            insertion: .offset(y: -8)
+                .combined(with: .opacity)
+                .animation(
+                    .easeOut(duration: NotchMotion.contentRevealSeconds)
+                        .delay(NotchMotion.contentRevealDelaySeconds)
+                ),
+            removal: .offset(y: -4)
+                .combined(with: .opacity)
+                .animation(.easeOut(duration: NotchMotion.contentHideSeconds))
+        )
+    }
+
+    private var bottomCornerRadius: CGFloat {
+        if model.isExpanded {
+            return 24
+        }
+        if model.isNotchRevealed {
+            return 20
+        }
+        return 12
+    }
+
+    private var topShoulder: CGFloat {
+        model.isNotchRevealed || model.isExpanded ? 8 : 6
+    }
+
+    private func silhouetteSize(in containerSize: CGSize) -> CGSize {
+        let desiredSize: CGSize
+        if model.isExpanded {
+            desiredSize = containerSize
+        } else if model.isNotchRevealed {
+            desiredSize = NotchPanelMetrics.productDefault.collapsedSize
+        } else {
+            desiredSize = notchSize
+        }
+
+        return CGSize(
+            width: min(max(0, desiredSize.width), containerSize.width),
+            height: min(max(0, desiredSize.height), containerSize.height)
+        )
     }
 }
 
@@ -162,7 +248,6 @@ private struct CompactNotchView: View {
         .padding(.top, 7)
         .padding(.bottom, 10)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(NotchIslandBackground(cornerRadius: 24, shadowRadius: 18))
         .accessibilityElement(children: .contain)
     }
 
@@ -260,6 +345,8 @@ private struct ExpandedNotchView: View {
     let onSettings: () -> Void
     let onQuit: () -> Void
 
+    @FocusState private var isTaskFieldFocused: Bool
+
     var body: some View {
         VStack(spacing: 12) {
             HStack(spacing: 0) {
@@ -322,10 +409,16 @@ private struct ExpandedNotchView: View {
                             .transition(.opacity.combined(with: .move(edge: .leading)))
                     }
 
-                    Text("Current task")
-                        .font(.system(size: 10, weight: .medium, design: .rounded))
-                        .foregroundStyle(.secondary)
-                        .tracking(0.2)
+                    HStack(spacing: 8) {
+                        Text("Current task")
+                            .font(.system(size: 10, weight: .medium, design: .rounded))
+                            .foregroundStyle(.secondary)
+                            .tracking(0.2)
+
+                        Spacer()
+
+                        agentMenu
+                    }
 
                     Text(model.presentedTaskTitle)
                         .font(.system(size: 14, weight: .medium, design: .rounded))
@@ -353,30 +446,82 @@ private struct ExpandedNotchView: View {
 
                     Spacer()
 
-                    Text("Review before sending")
+                    Text(
+                        model.isTalkShortcutAvailable
+                            ? "Read-only · ⌃⌥Space"
+                            : "Read-only · shortcut unavailable"
+                    )
                         .font(.system(size: 9, design: .rounded))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(
+                            model.isTalkShortcutAvailable
+                                ? Color.secondary
+                                : Color.orange
+                        )
                 }
 
-                HStack(spacing: 8) {
-                    TextField("What should Codex work on?", text: $model.taskDraft, axis: .vertical)
-                        .textFieldStyle(.roundedBorder)
-                        .lineLimit(1...2)
-                        .onChange(of: model.taskDraft) {
-                            let bounded = CodexDesktopHandoff
-                                .truncatingToMaximumUTF8Bytes(model.taskDraft)
-                            if model.taskDraft != bounded {
-                                model.taskDraft = bounded
-                            }
+                TextField("Ask a question or describe a task…", text: $model.taskDraft, axis: .vertical)
+                    .textFieldStyle(.roundedBorder)
+                    .lineLimit(1...2)
+                    .focused($isTaskFieldFocused)
+                    .disabled(model.isRunningPetTask)
+                    .onChange(of: model.taskDraft) {
+                        let bounded = CodexDesktopHandoff
+                            .truncatingToMaximumUTF8Bytes(model.taskDraft)
+                        if model.taskDraft != bounded {
+                            model.taskDraft = bounded
                         }
-                        .onSubmit(onOpenInCodex)
+                    }
+                    .onSubmit(model.askPet)
+                    .onChange(of: model.taskFocusRequest) {
+                        isTaskFieldFocused = true
+                    }
+
+                HStack(spacing: 8) {
+                    if model.isRunningPetTask {
+                        Button("Stop", role: .cancel, action: model.cancelPetTask)
+                            .controlSize(.small)
+                            .adaptiveGlassButton()
+                    } else {
+                        Button("Ask", action: model.askPet)
+                            .tint(.cyan.opacity(0.82))
+                            .controlSize(.small)
+                            .adaptiveGlassButton(prominent: true)
+                            .disabled(
+                                model.taskDraft
+                                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                                    .isEmpty
+                            )
+
+                        Button("Guide me", action: model.guideMe)
+                            .controlSize(.small)
+                            .adaptiveGlassButton()
+                            .help("Capture this screen once and ask Codex for read-only guidance")
+                    }
 
                     Button("Open in Codex", action: onOpenInCodex)
                         .tint(.cyan.opacity(0.82))
                         .controlSize(.small)
-                        .adaptiveGlassButton(prominent: true)
+                        .adaptiveGlassButton()
                         .disabled(model.taskDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                    Spacer()
+
+                    if !model.activeAgentSelectedSkillIDs.isEmpty {
+                        Text("\(model.activeAgentSelectedSkillIDs.count) skills")
+                            .font(.system(size: 9, design: .rounded))
+                            .foregroundStyle(.secondary)
+                    }
                 }
+
+                Label(
+                    "Guide me: one screenshot · advice only · never controls",
+                    systemImage: "eye.fill"
+                )
+                .font(.system(size: 9, design: .rounded))
+                .foregroundStyle(.secondary)
+                .accessibilityLabel(
+                    "Guide me captures one screenshot for advice only and never controls your computer"
+                )
 
                 if let feedback = model.taskHandoffFeedback {
                     Text(feedback)
@@ -388,7 +533,89 @@ private struct ExpandedNotchView: View {
             .padding(.vertical, 8)
             .softMaterialCard(cornerRadius: 14, tint: .indigo)
 
-            VStack(alignment: .leading, spacing: 6) {
+            if let response = model.taskResponse {
+                VStack(alignment: .leading, spacing: 6) {
+                    Label("Pet response", systemImage: "text.bubble")
+                        .font(.system(size: 10, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.secondary)
+
+                    ScrollView {
+                        Text(response)
+                            .font(.system(size: 11, design: .rounded))
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .scrollIndicators(.hidden)
+                    .frame(maxHeight: 86)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .softMaterialCard(cornerRadius: 14, tint: .cyan)
+            } else {
+                usageSection
+            }
+
+            HStack(spacing: 8) {
+                Text(model.connectionDetail)
+                    .font(.system(size: 10, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+
+                Spacer()
+
+                Button("Refresh", action: onRefresh)
+                    .disabled(model.isRefreshing || model.isPreviewMode)
+                    .accessibilityLabel("Refresh Codex data")
+                Button("Settings", action: onSettings)
+                Button("Quit", action: onQuit)
+            }
+            .buttonStyle(.borderless)
+            .font(.system(size: 11, weight: .medium, design: .rounded))
+        }
+        .padding(.horizontal, 14)
+        .padding(.top, hasNotch ? 7 : 10)
+        .padding(.bottom, 12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background {
+            if !hasNotch {
+                NotchIslandBackground(
+                    cornerRadius: 24,
+                    shadowRadius: 20,
+                    topAttached: false
+                )
+            }
+        }
+        .accessibilityElement(children: .contain)
+    }
+
+    @ViewBuilder
+    private var agentMenu: some View {
+        Menu {
+            ForEach(model.agentProfiles) { profile in
+                Button {
+                    model.activateAgentProfile(profile.id)
+                } label: {
+                    Label(
+                        profile.name,
+                        systemImage: profile.role.systemImageName
+                    )
+                }
+            }
+        } label: {
+            Label(
+                model.activeAgentProfile.name,
+                systemImage: model.activeAgentProfile.role.systemImageName
+            )
+            .font(.system(size: 9, weight: .semibold, design: .rounded))
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .help("Summon an agent and its assigned pet")
+        .accessibilityLabel("Active agent: \(model.activeAgentProfile.name)")
+    }
+
+    private var usageSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
                     Text("Usage")
                         .font(.system(size: 10, weight: .semibold, design: .rounded))
@@ -429,35 +656,6 @@ private struct ExpandedNotchView: View {
                     .frame(maxHeight: 78)
                 }
             }
-
-            HStack(spacing: 8) {
-                Text(model.connectionDetail)
-                    .font(.system(size: 10, design: .rounded))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-
-                Spacer()
-
-                Button("Refresh", action: onRefresh)
-                    .disabled(model.isRefreshing || model.isPreviewMode)
-                    .accessibilityLabel("Refresh Codex data")
-                Button("Settings", action: onSettings)
-                Button("Quit", action: onQuit)
-            }
-            .buttonStyle(.borderless)
-            .font(.system(size: 11, weight: .medium, design: .rounded))
-        }
-        .padding(.horizontal, 14)
-        .padding(.top, hasNotch ? 7 : 10)
-        .padding(.bottom, 12)
-        .background(
-            NotchIslandBackground(
-                cornerRadius: 24,
-                shadowRadius: 20,
-                topAttached: hasNotch
-            )
-        )
-        .accessibilityElement(children: .contain)
     }
 }
 
@@ -583,16 +781,133 @@ extension AppDisplayStatus {
     }
 }
 
+private struct NotchSilhouetteShape: InsettableShape {
+    var visibleSize: CGSize
+    var topShoulder: CGFloat
+    var bottomCornerRadius: CGFloat
+    private var insetAmount: CGFloat = 0
+
+    init(
+        visibleSize: CGSize,
+        topShoulder: CGFloat,
+        bottomCornerRadius: CGFloat
+    ) {
+        self.visibleSize = visibleSize
+        self.topShoulder = topShoulder
+        self.bottomCornerRadius = bottomCornerRadius
+    }
+
+    var animatableData: AnimatablePair<
+        AnimatablePair<CGFloat, CGFloat>,
+        AnimatablePair<CGFloat, CGFloat>
+    > {
+        get {
+            AnimatablePair(
+                AnimatablePair(visibleSize.width, visibleSize.height),
+                AnimatablePair(topShoulder, bottomCornerRadius)
+            )
+        }
+        set {
+            visibleSize.width = newValue.first.first
+            visibleSize.height = newValue.first.second
+            topShoulder = newValue.second.first
+            bottomCornerRadius = newValue.second.second
+        }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        let availableWidth = max(0, rect.width - insetAmount * 2)
+        let availableHeight = max(0, rect.height - insetAmount * 2)
+        let width = min(max(0, visibleSize.width - insetAmount * 2), availableWidth)
+        let height = min(max(0, visibleSize.height - insetAmount * 2), availableHeight)
+        guard width > 0, height > 0 else { return Path() }
+
+        let shoulder = min(
+            max(0, topShoulder),
+            min(width / 2, height)
+        )
+        let bottomRadius = min(
+            max(0, bottomCornerRadius - insetAmount),
+            min(max(0, width - shoulder * 2), max(0, height - shoulder)) / 2
+        )
+        let silhouetteRect = CGRect(
+            x: rect.midX - width / 2,
+            y: rect.minY + insetAmount,
+            width: width,
+            height: height
+        )
+        let left = silhouetteRect.minX
+        let right = silhouetteRect.maxX
+        let top = silhouetteRect.minY
+        let bottom = silhouetteRect.maxY
+        let bodyLeft = left + shoulder
+        let bodyRight = right - shoulder
+        let curve = 0.552_284_8
+
+        // The screen clips the top edge; these small reverse shoulders keep the
+        // attached shell from reading as a four-corner rounded rectangle.
+        var path = Path()
+        path.move(to: CGPoint(x: left, y: top))
+        path.addLine(to: CGPoint(x: right, y: top))
+        path.addCurve(
+            to: CGPoint(x: bodyRight, y: top + shoulder),
+            control1: CGPoint(x: right - curve * shoulder, y: top),
+            control2: CGPoint(x: bodyRight, y: top + shoulder - curve * shoulder)
+        )
+        path.addLine(to: CGPoint(x: bodyRight, y: bottom - bottomRadius))
+        path.addCurve(
+            to: CGPoint(x: bodyRight - bottomRadius, y: bottom),
+            control1: CGPoint(
+                x: bodyRight,
+                y: bottom - bottomRadius + curve * bottomRadius
+            ),
+            control2: CGPoint(
+                x: bodyRight - bottomRadius + curve * bottomRadius,
+                y: bottom
+            )
+        )
+        path.addLine(to: CGPoint(x: bodyLeft + bottomRadius, y: bottom))
+        path.addCurve(
+            to: CGPoint(x: bodyLeft, y: bottom - bottomRadius),
+            control1: CGPoint(
+                x: bodyLeft + bottomRadius - curve * bottomRadius,
+                y: bottom
+            ),
+            control2: CGPoint(
+                x: bodyLeft,
+                y: bottom - bottomRadius + curve * bottomRadius
+            )
+        )
+        path.addLine(to: CGPoint(x: bodyLeft, y: top + shoulder))
+        path.addCurve(
+            to: CGPoint(x: left, y: top),
+            control1: CGPoint(x: bodyLeft, y: top + shoulder - curve * shoulder),
+            control2: CGPoint(x: left + curve * shoulder, y: top)
+        )
+        path.closeSubpath()
+        return path
+    }
+
+    func inset(by amount: CGFloat) -> NotchSilhouetteShape {
+        var copy = self
+        copy.insetAmount += amount
+        return copy
+    }
+}
+
 private struct NotchIslandBackground: View {
     let cornerRadius: CGFloat
     let shadowRadius: CGFloat
     var topAttached = true
+    var silhouette: NotchSilhouetteShape? = nil
 
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     @ViewBuilder
     var body: some View {
-        if topAttached {
+        if let silhouette {
+            surface(silhouette)
+        } else if topAttached {
             surface(
                 UnevenRoundedRectangle(
                     topLeadingRadius: 0,
@@ -650,9 +965,11 @@ private struct NotchIslandBackground: View {
             )
         }
         .shadow(
-            color: .black.opacity(reduceTransparency ? 0.30 : 0.24),
+            color: shadowRadius > 0
+                ? .black.opacity(reduceTransparency ? 0.30 : 0.24)
+                : .clear,
             radius: shadowRadius,
-            y: 7
+            y: shadowRadius > 0 ? 7 : 0
         )
     }
 

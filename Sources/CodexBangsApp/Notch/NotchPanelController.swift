@@ -2,19 +2,52 @@
 import CodexNotchPetCore
 import SwiftUI
 
+enum NotchMotion {
+    static let revealMilliseconds: Int64 = 340
+    static let collapseMilliseconds: Int64 = 240
+    static let revealDamping = 0.86
+    static let contentRevealDelaySeconds = 0.10
+    static let contentRevealSeconds = 0.18
+    static let contentHideSeconds = 0.09
+    static let hoverDwell = Duration.milliseconds(80)
+    static let hoverExitGrace = Duration.milliseconds(350)
+    static var revealResponse: Double { Double(revealMilliseconds) / 1_000 }
+    static var collapseSeconds: Double { Double(collapseMilliseconds) / 1_000 }
+    static var revealDuration: Duration { .milliseconds(revealMilliseconds) }
+    static var collapseDuration: Duration { .milliseconds(collapseMilliseconds) }
+}
+
 @MainActor
 final class NotchPanelController {
+    private enum Presentation {
+        case hidden
+        case compact
+        case expanded
+    }
+
     private let model: AppModel
+    private let onOpenSettings: @MainActor () -> Void
     private let panel: NotchPanel
     private let hostingView: FirstMouseHostingView<NotchRootView>
 
     private var screenObserver: NSObjectProtocol?
     private var globalMouseMonitor: Any?
     private var localEventMonitor: Any?
+    private var isPointerHoveringSilhouette = false
+    private var hoverShowTask: Task<Void, Never>?
     private var hoverHideTask: Task<Void, Never>?
+    private var frameSettleTask: Task<Void, Never>?
+    private var focusTask: Task<Void, Never>?
+    private var renderedCenterGapWidth: CGFloat?
+    private var renderedNotchSize: CGSize?
+    private var renderedHasNotch: Bool?
 
-    init(model: AppModel) {
+    init(
+        model: AppModel,
+        onOpenSettings: @escaping @MainActor () -> Void
+    ) {
         self.model = model
+        self.onOpenSettings = onOpenSettings
         panel = NotchPanel(
             contentRect: .zero,
             styleMask: [.borderless, .nonactivatingPanel],
@@ -25,6 +58,7 @@ final class NotchPanelController {
             rootView: NotchRootView(
                 model: model,
                 centerGap: 76,
+                notchSize: CGSize(width: 76, height: 32),
                 hasNotch: false,
                 onToggleExpanded: {},
                 onHoverChanged: { _ in },
@@ -52,11 +86,18 @@ final class NotchPanelController {
     }
 
     func hide() {
+        hoverShowTask?.cancel()
+        hoverShowTask = nil
         hoverHideTask?.cancel()
         hoverHideTask = nil
+        frameSettleTask?.cancel()
+        frameSettleTask = nil
+        focusTask?.cancel()
+        focusTask = nil
         if !model.isExpanded {
             model.isNotchRevealed = false
         }
+        isPointerHoveringSilhouette = false
         panel.orderOut(nil)
     }
 
@@ -66,13 +107,36 @@ final class NotchPanelController {
 
     func setExpanded(_ expanded: Bool) {
         guard model.isExpanded != expanded else { return }
+        hoverShowTask?.cancel()
+        hoverShowTask = nil
         hoverHideTask?.cancel()
-        model.isExpanded = expanded
-        model.isNotchRevealed = expanded
+        hoverHideTask = nil
+        frameSettleTask?.cancel()
+        frameSettleTask = nil
+        if !expanded {
+            focusTask?.cancel()
+            focusTask = nil
+        }
         panel.permitsKey = expanded
         panel.styleMask = expanded ? [.borderless] : [.borderless, .nonactivatingPanel]
         panel.level = .mainMenu + 3
-        updateLayout(animated: panel.isVisible)
+
+        if hasHardwareNotch {
+            if expanded {
+                updateLayout(animated: false, presentation: .expanded)
+                hostingView.layoutSubtreeIfNeeded()
+                model.isNotchRevealed = true
+                model.isExpanded = true
+            } else {
+                model.isExpanded = false
+                model.isNotchRevealed = true
+                settleToCompactAfterMorph()
+            }
+        } else {
+            model.isExpanded = expanded
+            model.isNotchRevealed = expanded
+            updateLayout(animated: panel.isVisible)
+        }
 
         if expanded {
             NSApp.activate(ignoringOtherApps: true)
@@ -81,6 +145,14 @@ final class NotchPanelController {
             panel.resignKey()
             panel.orderFrontRegardless()
         }
+    }
+
+    func showTalkToPet() {
+        show()
+        setExpanded(true)
+        panel.makeKeyAndOrderFront(nil)
+        model.requestTaskFocus()
+        scheduleTaskFieldFocus()
     }
 
     func tearDown() {
@@ -96,8 +168,14 @@ final class NotchPanelController {
             NSEvent.removeMonitor(localEventMonitor)
             self.localEventMonitor = nil
         }
+        hoverShowTask?.cancel()
+        hoverShowTask = nil
         hoverHideTask?.cancel()
         hoverHideTask = nil
+        frameSettleTask?.cancel()
+        frameSettleTask = nil
+        focusTask?.cancel()
+        focusTask = nil
         panel.orderOut(nil)
     }
 
@@ -167,57 +245,88 @@ final class NotchPanelController {
     }
 
     private func collapseIfPointerIsOutside() {
-        guard model.isExpanded, panel.isVisible else { return }
-        if !panel.frame.contains(NSEvent.mouseLocation) {
+        guard panel.isVisible,
+              !isPointerHoveringSilhouette else {
+            return
+        }
+        if model.isExpanded {
             setExpanded(false)
+        } else if model.isNotchRevealed {
+            hoverShowTask?.cancel()
+            hoverShowTask = nil
+            hoverHideTask?.cancel()
+            hoverHideTask = nil
+            frameSettleTask?.cancel()
+            frameSettleTask = nil
+            model.isNotchRevealed = false
+            settleToHiddenAfterMorph()
         }
     }
 
-    private func updateLayout(animated: Bool) {
+    private func updateLayout(
+        animated: Bool,
+        presentation overridePresentation: Presentation? = nil
+    ) {
         guard let screen = targetScreen() else { return }
         let cameraHousing = cameraHousing(for: screen)
+        let presentation = overridePresentation
+            ?? currentPresentation(cameraHousing: cameraHousing)
         let menuBarHeight = max(0, screen.frame.maxY - screen.visibleFrame.maxY)
-        let metrics = panelMetrics(cameraHousing: cameraHousing)
+        let metrics = panelMetrics(
+            cameraHousing: cameraHousing,
+            presentation: presentation
+        )
         let layout = NotchGeometry.layout(
             screenFrame: screen.frame,
             cameraHousing: cameraHousing,
-            expanded: model.isExpanded,
+            expanded: presentation == .expanded,
             noNotchTopOffset: menuBarHeight + 6,
             metrics: metrics
         )
 
-        hostingView.rootView = NotchRootView(
-            model: model,
-            centerGap: layout.centerGap?.width ?? 76,
-            hasNotch: layout.hasNotch,
-            onToggleExpanded: { [weak self] in
-                self?.setExpanded(!(self?.model.isExpanded ?? false))
-            },
-            onHoverChanged: { [weak self] hovering in
-                self?.handleHoverChanged(hovering)
-            },
-            onRefresh: { [weak self] in
-                self?.model.refresh()
-            },
-            onOpenInCodex: { [weak self] in
-                self?.openTaskInCodex()
-            },
-            onSettings: { [weak self] in
-                self?.openSettings()
-            },
-            onQuit: {
-                NSApp.terminate(nil)
-            }
-        )
+        let centerGapWidth = layout.centerGap?.width ?? 76
+        let notchSize = layout.centerGap?.size ?? .zero
+        if renderedCenterGapWidth != centerGapWidth
+            || renderedNotchSize != notchSize
+            || renderedHasNotch != layout.hasNotch {
+            hostingView.rootView = NotchRootView(
+                model: model,
+                centerGap: centerGapWidth,
+                notchSize: notchSize,
+                hasNotch: layout.hasNotch,
+                onToggleExpanded: { [weak self] in
+                    self?.setExpanded(!(self?.model.isExpanded ?? false))
+                },
+                onHoverChanged: { [weak self] hovering in
+                    self?.handleHoverChanged(hovering)
+                },
+                onRefresh: { [weak self] in
+                    self?.model.refresh()
+                },
+                onOpenInCodex: { [weak self] in
+                    self?.openTaskInCodex()
+                },
+                onSettings: { [weak self] in
+                    self?.openSettings()
+                },
+                onQuit: {
+                    NSApp.terminate(nil)
+                }
+            )
+            renderedCenterGapWidth = centerGapWidth
+            renderedNotchSize = notchSize
+            renderedHasNotch = layout.hasNotch
+        }
 
         let shouldAnimate = animated
+            && cameraHousing == nil
             && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         if shouldAnimate {
             NSAnimationContext.runAnimationGroup { context in
-                context.duration = 0.29
+                context.duration = 0.38
                 context.timingFunction = CAMediaTimingFunction(
-                    controlPoints: 0.22,
-                    0.86,
+                    controlPoints: 0.16,
+                    1.00,
                     0.30,
                     1.0
                 )
@@ -252,12 +361,14 @@ final class NotchPanelController {
         )
     }
 
-    private func panelMetrics(cameraHousing: CGRect?) -> NotchPanelMetrics {
+    private func panelMetrics(
+        cameraHousing: CGRect?,
+        presentation: Presentation
+    ) -> NotchPanelMetrics {
         guard let cameraHousing else {
             return .noNotchDefault
         }
-        guard !model.isExpanded,
-              !model.isNotchRevealed else {
+        guard presentation == .hidden else {
             return .productDefault
         }
 
@@ -270,9 +381,82 @@ final class NotchPanelController {
         )
     }
 
+    private func currentPresentation(cameraHousing: CGRect?) -> Presentation {
+        if model.isExpanded {
+            return .expanded
+        }
+        if cameraHousing != nil, model.isNotchRevealed {
+            return .compact
+        }
+        return .hidden
+    }
+
+    private var hasHardwareNotch: Bool {
+        guard let screen = targetScreen() else { return false }
+        return cameraHousing(for: screen) != nil
+    }
+
+    private var shouldReduceMotion: Bool {
+        NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+    }
+
+    private func settleToCompactAfterMorph() {
+        guard !shouldReduceMotion else {
+            updateLayout(animated: false, presentation: .compact)
+            hideCompactIfPointerIsOutside()
+            return
+        }
+
+        frameSettleTask = Task { [weak self] in
+            try? await Task.sleep(for: NotchMotion.revealDuration)
+            guard !Task.isCancelled,
+                  let self,
+                  !self.model.isExpanded,
+                  self.model.isNotchRevealed else {
+                return
+            }
+            self.frameSettleTask = nil
+            self.updateLayout(animated: false, presentation: .compact)
+            self.hideCompactIfPointerIsOutside()
+        }
+    }
+
+    private func settleToHiddenAfterMorph() {
+        guard !shouldReduceMotion else {
+            updateLayout(animated: false, presentation: .hidden)
+            return
+        }
+
+        frameSettleTask = Task { [weak self] in
+            try? await Task.sleep(for: NotchMotion.collapseDuration)
+            guard !Task.isCancelled,
+                  let self,
+                  !self.model.isExpanded,
+                  !self.model.isNotchRevealed else {
+                return
+            }
+            self.updateLayout(animated: false, presentation: .hidden)
+            self.frameSettleTask = nil
+        }
+    }
+
+    private func hideCompactIfPointerIsOutside() {
+        guard !model.isExpanded,
+              model.isNotchRevealed,
+              !isPointerHoveringSilhouette else {
+            return
+        }
+        model.isNotchRevealed = false
+        settleToHiddenAfterMorph()
+    }
+
     private func handleHoverChanged(_ hovering: Bool) {
         guard panel.isVisible else { return }
+        let wasHovering = isPointerHoveringSilhouette
+        isPointerHoveringSilhouette = hovering
 
+        hoverShowTask?.cancel()
+        hoverShowTask = nil
         hoverHideTask?.cancel()
         hoverHideTask = nil
 
@@ -282,42 +466,76 @@ final class NotchPanelController {
                 return
             }
             guard !model.isNotchRevealed else { return }
-            model.isNotchRevealed = true
-            updateLayout(animated: true)
+            frameSettleTask?.cancel()
+            frameSettleTask = nil
+            hoverShowTask = Task { [weak self] in
+                try? await Task.sleep(for: NotchMotion.hoverDwell)
+                guard !Task.isCancelled,
+                      let self,
+                      self.panel.isVisible,
+                      !self.model.isExpanded,
+                      !self.model.isNotchRevealed,
+                      self.isPointerHoveringSilhouette else {
+                    return
+                }
+                self.updateLayout(animated: false, presentation: .compact)
+                self.hostingView.layoutSubtreeIfNeeded()
+                self.model.isNotchRevealed = true
+                self.hoverShowTask = nil
+            }
             return
         }
 
-        guard !model.isExpanded else { return }
+        guard wasHovering else { return }
         hoverHideTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(350))
+            try? await Task.sleep(for: NotchMotion.hoverExitGrace)
             guard !Task.isCancelled,
-                  let self,
-                  !self.model.isExpanded,
-                  !self.panel.frame.contains(NSEvent.mouseLocation) else {
+                  let self else {
                 return
             }
+            if self.model.isExpanded {
+                self.setExpanded(false)
+                return
+            }
+            self.frameSettleTask?.cancel()
+            self.frameSettleTask = nil
             self.model.isNotchRevealed = false
-            self.updateLayout(animated: true)
+            self.settleToHiddenAfterMorph()
             self.hoverHideTask = nil
         }
     }
 
     private func openSettings() {
-        NSApp.activate(ignoringOtherApps: true)
-        let opened = NSApp.sendAction(
-            Selector(("showSettingsWindow:")),
-            to: nil,
-            from: nil
-        )
-        if !opened {
-            NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
-        }
+        setExpanded(false)
+        onOpenSettings()
     }
 
     private func openTaskInCodex() {
-        CodexDesktopLauncher.open(prompt: model.taskDraft) { [weak self] opened in
+        CodexDesktopLauncher.open(prompt: model.taskPromptForHandoff) { [weak self] opened in
             self?.model.recordTaskHandoff(opened: opened)
         }
+    }
+
+    private func scheduleTaskFieldFocus() {
+        focusTask?.cancel()
+        focusTask = Task { [weak self] in
+            for _ in 0..<5 {
+                guard !Task.isCancelled, let self else { return }
+                if self.focusTaskField() {
+                    self.focusTask = nil
+                    return
+                }
+                try? await Task.sleep(for: .milliseconds(75))
+            }
+            self?.focusTask = nil
+        }
+    }
+
+    private func focusTaskField() -> Bool {
+        guard let field = hostingView.firstEditableTextInput() else {
+            return false
+        }
+        return panel.makeFirstResponder(field)
     }
 }
 
@@ -342,5 +560,39 @@ private final class NotchPanel: NSPanel {
 private final class FirstMouseHostingView<Content: View>: NSHostingView<Content> {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
         true
+    }
+
+    func firstEditableTextInput() -> NSResponder? {
+        firstEditableTextField(in: self)
+            ?? firstEditableTextView(in: self)
+    }
+
+    private func firstEditableTextField(in view: NSView) -> NSTextField? {
+        if let field = view as? NSTextField,
+           field.isEditable,
+           field.isEnabled {
+            return field
+        }
+
+        for subview in view.subviews {
+            if let field = firstEditableTextField(in: subview) {
+                return field
+            }
+        }
+        return nil
+    }
+
+    private func firstEditableTextView(in view: NSView) -> NSTextView? {
+        if let textView = view as? NSTextView,
+           textView.isEditable {
+            return textView
+        }
+
+        for subview in view.subviews {
+            if let textView = firstEditableTextView(in: subview) {
+                return textView
+            }
+        }
+        return nil
     }
 }

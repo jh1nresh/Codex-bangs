@@ -9,5 +9,13 @@ struct CodexBangsApp: App {
             SettingsView(model: appDelegate.model)
         }
         .windowResizability(.contentSize)
+        .commands {
+            CommandGroup(replacing: .appSettings) {
+                Button("Settings…") {
+                    appDelegate.openSettings()
+                }
+                .keyboardShortcut(",")
+            }
+        }
     }
 }
