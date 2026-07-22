@@ -1,17 +1,19 @@
 # Codex-bangs
 
-A macOS notch companion for Codex status, usage, read-only pet tasks, one-shot
-screen guidance, and Codex-compatible v2 pets.
+A macOS notch companion for Codex status, usage, voice-first read-only pet tasks,
+one-shot screen guidance, and Codex-compatible v2 pets.
 
 ## Current status
 
 The first native macOS app slice is implemented. It builds a menu-bar app and a
 top-center AppKit panel with hidden, compact, and expanded SwiftUI states, real Codex
 usage windows, recent-task metadata, stale/offline handling, settings, and local
-Codex v2 pets. `⌃⌥Space` summons a focused Talk to pet composer. `Ask` creates a
-persisted Codex task in a read-only filesystem sandbox, while `Guide me` sends a
-single explicit screenshot through Codex and removes the local image after the
-ephemeral response. On a notched display the resting surface is invisible; hovering
+Codex v2 pets. `⌃⌥Space` summons Talk to pet and starts an explicit voice
+question. The on-device transcript is shown for review before `Voice Ask`
+creates a persisted Codex task in a read-only filesystem sandbox. `Look & guide`
+takes a single explicit screenshot only after confirmation, sends it through
+Codex, and removes the local image after the ephemeral response. On a notched
+display the resting surface is invisible; hovering
 the camera area reveals a compact black island with the pet inside it, and
 `Open details` keeps that island's width and top edge fixed while extending the
 panel downward. Notched placement uses the full screen, safe-area insets, and
@@ -83,11 +85,11 @@ See [Custom pet packages](docs/pets.md) for the format and safety contract.
 - restrained macOS 26 Liquid Glass controls with material fallbacks on macOS 14–15;
 - single-click wave, double-click jump, and panel-local pointer gaze;
 - outside-click, Escape, and explicit-button collapse back into the notch;
-- a `Talk to pet` composer with direct read-only Ask, cancel, response, and a
-  separate reviewable `Open in Codex` path for editable work;
-- a permission-free `⌃⌥Space` global shortcut that expands the notch and focuses
-  the composer;
-- explicit one-shot `Guide me` screen capture with app exclusion, a 2560-pixel
+- a voice-first `Talk to pet` flow with review-before-send, direct read-only Ask,
+  cancel, response, and a separate `Open in Codex` path for editable work;
+- a permission-free `⌃⌥Space` global shortcut that expands the notch and starts
+  an explicit voice question;
+- explicit one-shot `Look & guide` screen capture with app exclusion, a 2560-pixel
   cap, private temporary storage, ephemeral task execution, and cleanup;
 - local Skills discovery and per-agent skill selection without reading skill
   instructions;
@@ -132,19 +134,22 @@ prompts, cwd paths, tool output, raw stderr, or credentials.
 ## Privacy boundary
 
 The app never opens `~/.codex/auth.json`, starts a network listener, approves an
-elevated command, controls another app, or logs raw app-server envelopes. `Ask`
-passes the explicit text plus the active role and selected skill invocation
+elevated command, controls another app, or logs raw app-server envelopes. The
+microphone is active only during a user-started recording; speech recognition is
+required to stay on-device, audio is never written to disk, and the transcript is
+reviewed before sending. `Voice Ask` passes that explicit transcript plus the
+active role and selected skill invocation
 through the supported local Codex executable on stdin, supplies the selected
 task folder, uses `-s read-only -a never --ignore-user-config`, and stores only
 the bounded final answer in memory; the resulting Codex task is persisted. Codex
-may load the selected skill and read files its read-only sandbox permits. `Guide
-me` runs the same role/skill boundary as an ephemeral task with one attached
+may load the selected skill and read files its read-only sandbox permits. `Look
+& guide` runs the same role/skill boundary as an ephemeral task with one attached
 screenshot, excludes Codex-bangs itself, and deletes its private temporary
 directory on success, error, or cancellation. Direct tasks ignore configured
 plugins and MCP servers; `Open in Codex` is the explicit path for using them.
 
-`Open in Codex` passes the active role, selected skill names, and text the user
-entered to the locally registered Codex desktop URL handler, where the user still
+`Open in Codex` passes the active role, selected skill names, and reviewed
+transcript to the locally registered Codex desktop URL handler, where the user still
 reviews and presses Send. The handler must match the expected OpenAI code
 signature and Codex bundle identifier. Drafts and displayed answers are
 byte/character bounded and are not logged by Codex-bangs.

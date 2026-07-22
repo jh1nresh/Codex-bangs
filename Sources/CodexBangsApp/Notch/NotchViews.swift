@@ -334,6 +334,25 @@ private struct NoNotchPillView: View {
     }
 }
 
+private enum VoiceTaskIntent {
+    case ask
+    case guide
+
+    var label: String {
+        switch self {
+        case .ask: "Voice Ask"
+        case .guide: "Look & guide"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .ask: "mic.fill"
+        case .guide: "eye.fill"
+        }
+    }
+}
+
 @MainActor
 private struct ExpandedNotchView: View {
     @Bindable var model: AppModel
@@ -345,7 +364,9 @@ private struct ExpandedNotchView: View {
     let onSettings: () -> Void
     let onQuit: () -> Void
 
-    @FocusState private var isTaskFieldFocused: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var voiceInput = VoiceInputService()
+    @State private var voiceIntent: VoiceTaskIntent = .ask
 
     var body: some View {
         VStack(spacing: 12) {
@@ -448,8 +469,8 @@ private struct ExpandedNotchView: View {
 
                     Text(
                         model.isTalkShortcutAvailable
-                            ? "Read-only · ⌃⌥Space"
-                            : "Read-only · shortcut unavailable"
+                            ? voiceHeaderStatus
+                            : "Voice · shortcut unavailable"
                     )
                         .font(.system(size: 9, design: .rounded))
                         .foregroundStyle(
@@ -459,68 +480,24 @@ private struct ExpandedNotchView: View {
                         )
                 }
 
-                TextField("Ask a question or describe a task…", text: $model.taskDraft, axis: .vertical)
-                    .textFieldStyle(.roundedBorder)
-                    .lineLimit(1...2)
-                    .focused($isTaskFieldFocused)
-                    .disabled(model.isRunningPetTask)
-                    .onChange(of: model.taskDraft) {
-                        let bounded = CodexDesktopHandoff
-                            .truncatingToMaximumUTF8Bytes(model.taskDraft)
-                        if model.taskDraft != bounded {
-                            model.taskDraft = bounded
-                        }
-                    }
-                    .onSubmit(model.askPet)
-                    .onChange(of: model.taskFocusRequest) {
-                        isTaskFieldFocused = true
-                    }
-
-                HStack(spacing: 8) {
-                    if model.isRunningPetTask {
-                        Button("Stop", role: .cancel, action: model.cancelPetTask)
-                            .controlSize(.small)
-                            .adaptiveGlassButton()
-                    } else {
-                        Button("Ask", action: model.askPet)
-                            .tint(.cyan.opacity(0.82))
-                            .controlSize(.small)
-                            .adaptiveGlassButton(prominent: true)
-                            .disabled(
-                                model.taskDraft
-                                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                                    .isEmpty
-                            )
-
-                        Button("Guide me", action: model.guideMe)
-                            .controlSize(.small)
-                            .adaptiveGlassButton()
-                            .help("Capture this screen once and ask Codex for read-only guidance")
-                    }
-
-                    Button("Open in Codex", action: onOpenInCodex)
-                        .tint(.cyan.opacity(0.82))
-                        .controlSize(.small)
-                        .adaptiveGlassButton()
-                        .disabled(model.taskDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-
-                    Spacer()
-
-                    if !model.activeAgentSelectedSkillIDs.isEmpty {
-                        Text("\(model.activeAgentSelectedSkillIDs.count) skills")
-                            .font(.system(size: 9, design: .rounded))
-                            .foregroundStyle(.secondary)
-                    }
-                }
+                voiceActions
+                    .frame(height: 28, alignment: .leading)
+                    .animation(
+                        reduceMotion ? nil : .easeOut(duration: 0.14),
+                        value: voiceInput.phase
+                    )
 
                 Label(
-                    "Guide me: one screenshot · advice only · never controls",
-                    systemImage: "eye.fill"
+                    voicePrivacyLabel,
+                    systemImage: voiceInput.phase == .listening
+                        ? "record.circle.fill"
+                        : "hand.raised.fill"
                 )
                 .font(.system(size: 9, design: .rounded))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(voiceInput.phase == .listening ? .red : .secondary)
+                .lineLimit(1)
                 .accessibilityLabel(
-                    "Guide me captures one screenshot for advice only and never controls your computer"
+                    "The microphone is used only while recording. Look and guide captures one screenshot for advice only and never controls your computer."
                 )
 
                 if let feedback = model.taskHandoffFeedback {
@@ -531,9 +508,12 @@ private struct ExpandedNotchView: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
+            .frame(height: 102, alignment: .top)
             .softMaterialCard(cornerRadius: 14, tint: .indigo)
 
-            if let response = model.taskResponse {
+            if showsVoiceOutput {
+                voiceOutputSection
+            } else if let response = model.taskResponse {
                 VStack(alignment: .leading, spacing: 6) {
                     Label("Pet response", systemImage: "text.bubble")
                         .font(.system(size: 10, weight: .semibold, design: .rounded))
@@ -586,6 +566,279 @@ private struct ExpandedNotchView: View {
             }
         }
         .accessibilityElement(children: .contain)
+        .onChange(of: model.voiceInputRequest) {
+            handleVoiceShortcut()
+        }
+        .onChange(of: model.voiceCancellationRequest) {
+            cancelVoiceSession()
+        }
+        .onDisappear {
+            cancelVoiceSession()
+        }
+    }
+
+    @ViewBuilder
+    private var voiceActions: some View {
+        Group {
+            switch voiceInput.phase {
+            case .idle:
+                HStack(spacing: 8) {
+                    Button {
+                        startVoice(.ask)
+                    } label: {
+                        Label("Voice Ask", systemImage: "mic.fill")
+                    }
+                    .tint(.cyan.opacity(0.82))
+                    .adaptiveGlassButton(prominent: true)
+
+                    Button {
+                        startVoice(.guide)
+                    } label: {
+                        Label("Look & guide", systemImage: "eye.fill")
+                    }
+                    .adaptiveGlassButton()
+
+                    voiceSkillCount
+                }
+
+            case .requestingPermission:
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Waiting for microphone permission…")
+                        .font(.system(size: 10, design: .rounded))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Cancel", role: .cancel, action: cancelVoiceSession)
+                        .adaptiveGlassButton()
+                }
+
+            case .listening:
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(.red)
+                        .frame(width: 8, height: 8)
+                        .accessibilityHidden(true)
+                    Text("Listening for \(voiceIntent.label)…")
+                        .font(.system(size: 10, weight: .semibold, design: .rounded))
+                    Spacer()
+                    Button("Done", action: voiceInput.finish)
+                        .tint(.cyan.opacity(0.82))
+                        .adaptiveGlassButton(prominent: true)
+                        .keyboardShortcut(.return, modifiers: [])
+                        .accessibilityLabel("Stop recording and review transcript")
+                    Button("Cancel", role: .cancel, action: cancelVoiceSession)
+                        .adaptiveGlassButton()
+                }
+
+            case .finalizing:
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Preparing transcript…")
+                        .font(.system(size: 10, design: .rounded))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Cancel", role: .cancel, action: cancelVoiceSession)
+                        .adaptiveGlassButton()
+                }
+
+            case .ready:
+                HStack(spacing: 7) {
+                    Button("Again") {
+                        voiceInput.reset()
+                        startVoice(voiceIntent)
+                    }
+                    .adaptiveGlassButton()
+                    .accessibilityLabel("Record the voice question again")
+
+                    Button("Ask pet") {
+                        submitVoice(.ask)
+                    }
+                    .tint(.cyan.opacity(0.82))
+                    .adaptiveGlassButton(prominent: voiceIntent == .ask)
+
+                    Button("Look & guide") {
+                        submitVoice(.guide)
+                    }
+                    .adaptiveGlassButton(prominent: voiceIntent == .guide)
+                    .help("Capture this screen once and ask Codex for read-only guidance")
+
+                    Menu {
+                        Button("Open transcript in Codex") {
+                            handOffVoiceToCodex()
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                    }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
+                    .accessibilityLabel("More voice actions")
+                }
+
+            case .error:
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                    Text("Voice unavailable")
+                        .font(.system(size: 10, weight: .semibold, design: .rounded))
+                    Spacer()
+                    Button("Try again") {
+                        voiceInput.reset()
+                        startVoice(voiceIntent)
+                    }
+                    .adaptiveGlassButton()
+                    Button("Cancel", role: .cancel, action: cancelVoiceSession)
+                        .adaptiveGlassButton()
+                }
+            }
+        }
+        .controlSize(.small)
+        .disabled(model.isPreviewMode || model.isRunningPetTask)
+    }
+
+    @ViewBuilder
+    private var voiceSkillCount: some View {
+        Spacer()
+        if !model.activeAgentSelectedSkillIDs.isEmpty {
+            Text("\(model.activeAgentSelectedSkillIDs.count) skills")
+                .font(.system(size: 9, design: .rounded))
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var voiceOutputSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label(voiceOutputTitle, systemImage: voiceOutputSystemImage)
+                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                .foregroundStyle(.secondary)
+
+            ScrollView {
+                Text(voiceOutputText)
+                    .font(.system(size: 11, design: .rounded))
+                    .foregroundStyle(voiceInput.phase == .error ? .orange : .primary)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .scrollIndicators(.hidden)
+            .frame(maxHeight: 58)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .frame(height: 86, alignment: .top)
+        .softMaterialCard(cornerRadius: 14, tint: .cyan)
+    }
+
+    private var showsVoiceOutput: Bool {
+        voiceInput.phase != .idle
+    }
+
+    private var voiceHeaderStatus: String {
+        switch voiceInput.phase {
+        case .idle: "Voice · ⌃⌥Space"
+        case .requestingPermission: "Requesting access"
+        case .listening: "Mic on"
+        case .finalizing: "Finishing"
+        case .ready: "Review before send"
+        case .error: "Mic off"
+        }
+    }
+
+    private var voicePrivacyLabel: String {
+        switch voiceInput.phase {
+        case .listening:
+            "Mic on · Done stops recording · screen off"
+        case .ready:
+            "Review first · Look & guide takes one screenshot"
+        default:
+            "Mic & screen off · advice only · never controls"
+        }
+    }
+
+    private var voiceOutputTitle: String {
+        switch voiceInput.phase {
+        case .error: "Voice input"
+        case .ready: "Transcript"
+        default: "Live transcript"
+        }
+    }
+
+    private var voiceOutputSystemImage: String {
+        voiceInput.phase == .error ? "exclamationmark.bubble" : "quote.bubble"
+    }
+
+    private var voiceOutputText: String {
+        if voiceInput.phase == .error {
+            return voiceInput.errorMessage ?? "Voice input could not start."
+        }
+        if !voiceInput.transcript.isEmpty {
+            return voiceInput.transcript
+        }
+        switch voiceInput.phase {
+        case .requestingPermission:
+            return "Approve microphone and Speech Recognition to begin."
+        case .listening:
+            return "Start speaking. Your words will appear here."
+        case .finalizing:
+            return "Finishing the on-device transcript…"
+        case .ready:
+            return "I couldn't hear anything. Record again."
+        case .idle, .error:
+            return ""
+        }
+    }
+
+    private func startVoice(_ intent: VoiceTaskIntent) {
+        guard !model.isRunningPetTask else { return }
+        voiceIntent = intent
+        model.setVoiceSessionActive(true)
+        Task {
+            await voiceInput.start()
+        }
+    }
+
+    private func handleVoiceShortcut() {
+        switch voiceInput.phase {
+        case .listening:
+            voiceInput.finish()
+        case .idle, .ready, .error:
+            voiceInput.reset()
+            startVoice(.ask)
+        case .requestingPermission, .finalizing:
+            break
+        }
+    }
+
+    private func submitVoice(_ intent: VoiceTaskIntent) {
+        let transcript = CodexDesktopHandoff.truncatingToMaximumUTF8Bytes(
+            voiceInput.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+        )
+        guard !transcript.isEmpty else { return }
+        model.taskDraft = transcript
+        voiceInput.reset()
+        model.setVoiceSessionActive(false)
+        switch intent {
+        case .ask:
+            model.askPet()
+        case .guide:
+            model.guideMe()
+        }
+    }
+
+    private func handOffVoiceToCodex() {
+        let transcript = CodexDesktopHandoff.truncatingToMaximumUTF8Bytes(
+            voiceInput.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+        )
+        guard !transcript.isEmpty else { return }
+        model.taskDraft = transcript
+        voiceInput.reset()
+        model.setVoiceSessionActive(false)
+        onOpenInCodex()
+    }
+
+    private func cancelVoiceSession() {
+        voiceInput.cancel()
+        model.setVoiceSessionActive(false)
     }
 
     @ViewBuilder

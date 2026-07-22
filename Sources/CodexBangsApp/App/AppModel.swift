@@ -67,9 +67,11 @@ final class AppModel {
     var isExpanded = false
     var isNotchRevealed = false
     var isRefreshing = false
-    private(set) var taskFocusRequest: UInt64 = 0
+    private(set) var voiceInputRequest: UInt64 = 0
+    private(set) var voiceCancellationRequest: UInt64 = 0
     private(set) var isRefreshingCapabilities = false
     private(set) var isRunningPetTask = false
+    private(set) var isVoiceSessionActive = false
     private(set) var isImportingPet = false
     private(set) var isTalkShortcutAvailable = true
     var isPreviewMode = false
@@ -219,6 +221,9 @@ final class AppModel {
         if isRunningPetTask {
             return .running
         }
+        if isVoiceSessionActive {
+            return .lookDirectionsA
+        }
         if let interactionAnimation {
             return interactionAnimation
         }
@@ -320,6 +325,7 @@ final class AppModel {
         interactionTask = nil
         isRefreshingCapabilities = false
         isRunningPetTask = false
+        isVoiceSessionActive = false
     }
 
     func refresh() {
@@ -427,8 +433,16 @@ final class AppModel {
         taskRunner?.cancel()
     }
 
-    func requestTaskFocus() {
-        taskFocusRequest &+= 1
+    func requestVoiceInput() {
+        voiceInputRequest &+= 1
+    }
+
+    func requestVoiceCancellation() {
+        voiceCancellationRequest &+= 1
+    }
+
+    func setVoiceSessionActive(_ isActive: Bool) {
+        isVoiceSessionActive = isActive
     }
 
     func setTalkShortcutAvailable(_ isAvailable: Bool) {
@@ -559,6 +573,7 @@ final class AppModel {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         let configuredWorkspacePath = taskWorkspacePath
 
+        isVoiceSessionActive = false
         isRunningPetTask = true
         taskResponse = nil
         taskHandoffFeedback = kind == .guide

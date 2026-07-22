@@ -40,7 +40,9 @@ targets:
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         LSUIElement: true
         NSHighResolutionCapable: true
-        NSScreenCaptureUsageDescription: Codex-bangs captures the display under your pointer only when you click Guide me, sends it through Codex for guidance, and deletes the temporary image after the response.
+        NSMicrophoneUsageDescription: Codex-bangs uses the microphone only after you start a voice question, then stops when you finish, cancel, or close the notch.
+        NSSpeechRecognitionUsageDescription: Codex-bangs transcribes the voice question you explicitly record so you can review it before sending it to Codex.
+        NSScreenCaptureUsageDescription: Codex-bangs captures the display under your pointer only when you click Look & guide, sends it through Codex for guidance, and deletes the temporary image after the response.
         NSPrefersDisplaySafeAreaCompatibilityMode: false
         UTExportedTypeDeclarations:
           - UTTypeIdentifier: io.jeezlabs.codexbangs.pet-package
@@ -65,6 +67,7 @@ targets:
         PRODUCT_NAME: Codex-bangs
         ENABLE_APP_SANDBOX: NO
         ENABLE_HARDENED_RUNTIME: YES
+        CODE_SIGN_ENTITLEMENTS: Sources/CodexBangsApp/CodexBangs.entitlements
         MARKETING_VERSION: 0.2.0
         CURRENT_PROJECT_VERSION: 2
 

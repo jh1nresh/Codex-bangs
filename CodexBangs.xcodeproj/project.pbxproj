@@ -20,6 +20,7 @@
 		3641DAD50530B5DD993A3A85 /* SettingsWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FEACE72072A8A61B7B57780 /* SettingsWindowController.swift */; };
 		4E9493CE84A2457588E8B3CE /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F602124475036A0527947294 /* SettingsView.swift */; };
 		5AA2AE1CE1692FD2B40A0070 /* NotchViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5EC7A7170E3608D9BEB1938 /* NotchViews.swift */; };
+		5AD83D2C1AD259CC22911F13 /* VoiceInputService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D98C39F9BB222DFB2976A6F /* VoiceInputService.swift */; };
 		695743840CB8E55F51EBBB54 /* ScreenCaptureService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24D9919C1151FD4BC8B1AB8C /* ScreenCaptureService.swift */; };
 		69D29016407B911E7DCB31F1 /* BundledSkills in Resources */ = {isa = PBXBuildFile; fileRef = B488434CFA477925B8D99EF2 /* BundledSkills */; };
 		759A3064023A030AA4B4F729 /* HatchPetSkillInstaller.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52B204228157C973829A5D6D /* HatchPetSkillInstaller.swift */; };
@@ -69,6 +70,7 @@
 		1457FE36354469D31CB2AC28 /* GlobalHotKeyService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalHotKeyService.swift; sourceTree = "<group>"; };
 		1E13D7393023E5166BFCE1A4 /* CodexAppServerClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexAppServerClient.swift; sourceTree = "<group>"; };
 		24D9919C1151FD4BC8B1AB8C /* ScreenCaptureService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenCaptureService.swift; sourceTree = "<group>"; };
+		27E9ABF74A8244622B054F82 /* CodexBangs.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = CodexBangs.entitlements; sourceTree = "<group>"; };
 		354762ACFDEA7821976585BC /* ProtocolModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtocolModels.swift; sourceTree = "<group>"; };
 		3ACE4081FC68557E6C26AC08 /* PetPackageType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PetPackageType.swift; sourceTree = "<group>"; };
 		45706627812EA1C773AA3ABD /* PetCreatorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PetCreatorView.swift; sourceTree = "<group>"; };
@@ -80,6 +82,7 @@
 		7825E249616B8B02F868694C /* PetContract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PetContract.swift; sourceTree = "<group>"; };
 		839F16D6C35700952A153BA0 /* CodexBangsApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexBangsApp.swift; sourceTree = "<group>"; };
 		86E82397A280917B992E9013 /* CodexBangs.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CodexBangs.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		9D98C39F9BB222DFB2976A6F /* VoiceInputService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceInputService.swift; sourceTree = "<group>"; };
 		A254CC296B69E8943965623C /* PetSpriteView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PetSpriteView.swift; sourceTree = "<group>"; };
 		A8DE8071A842DA1755D83B5E /* CodexDesktopLauncher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexDesktopLauncher.swift; sourceTree = "<group>"; };
 		AB59370A60C4C52ED50EB786 /* CodexDesktopHandoff.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexDesktopHandoff.swift; sourceTree = "<group>"; };
@@ -161,6 +164,7 @@
 				A8DE8071A842DA1755D83B5E /* CodexDesktopLauncher.swift */,
 				1457FE36354469D31CB2AC28 /* GlobalHotKeyService.swift */,
 				4FEACE72072A8A61B7B57780 /* SettingsWindowController.swift */,
+				9D98C39F9BB222DFB2976A6F /* VoiceInputService.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -178,6 +182,7 @@
 		9A49A50CC3908D073EDC9495 /* CodexBangsApp */ = {
 			isa = PBXGroup;
 			children = (
+				27E9ABF74A8244622B054F82 /* CodexBangs.entitlements */,
 				8C5660719B326DF0C0D5FE0A /* App */,
 				AF7B6A3E9892E312800BB425 /* Notch */,
 				9381FBD24D83514AC89DEAE4 /* Pet */,
@@ -307,6 +312,7 @@
 				03590A72BB049BFD98E05081 /* PetSpriteView.swift in Sources */,
 				4E9493CE84A2457588E8B3CE /* SettingsView.swift in Sources */,
 				3641DAD50530B5DD993A3A85 /* SettingsWindowController.swift in Sources */,
+				5AD83D2C1AD259CC22911F13 /* VoiceInputService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -346,6 +352,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Sources/CodexBangsApp/CodexBangs.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 2;
 				ENABLE_APP_SANDBOX = NO;
@@ -366,6 +373,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Sources/CodexBangsApp/CodexBangs.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 2;
 				ENABLE_APP_SANDBOX = NO;

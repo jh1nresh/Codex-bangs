@@ -124,7 +124,7 @@ struct SettingsView: View {
                 )
                 Text(
                     model.isTalkShortcutAvailable
-                        ? "Opens the notch and focuses the prompt."
+                        ? "Opens the notch and starts an explicit voice question."
                         : "Another app may own ⌃⌥Space. Use Talk to pet from the menu bar."
                 )
                     .font(.caption2)
@@ -242,7 +242,7 @@ struct SettingsView: View {
                     .disabled(model.isRefreshing || model.isPreviewMode)
                 }
 
-                Text("Ask runs as a persisted Codex task with a read-only filesystem sandbox. Open in Codex remains the path for editable work and approvals.")
+                Text("Voice Ask runs as a persisted Codex task with a read-only filesystem sandbox. Open in Codex remains the path for editable work and approvals.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -250,12 +250,12 @@ struct SettingsView: View {
             settingsGroup("Privacy", systemImage: "hand.raised.fill", tint: .mint) {
                 Toggle("Hide task names and locations", isOn: $model.privacyMode)
 
-                Text("Codex-bangs reads thread-list summary metadata. Ask sends your text plus the active role and selected skill invocation through local Codex; Codex may load that skill and read files allowed by its read-only sandbox, including the chosen task folder. Guide me also sends one screenshot only after you click it, then deletes the private temporary file. It never watches continuously or controls the computer.")
+                Text("Codex-bangs reads thread-list summary metadata. The microphone turns on only after you start a voice question, uses supported on-device speech recognition, and stops when you finish, cancel, or close the notch. Voice Ask sends the transcript plus the active role and selected skill invocation through local Codex. Look & guide captures one screenshot only after you confirm the transcript and click it, then deletes the private temporary file. It never listens or watches continuously, and never controls the computer.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
                 Label(
-                    "Direct Ask and Guide me ignore user configuration, so configured plugins and MCP tools are not loaded. Use Open in Codex when you intentionally need them.",
+                    "Direct Voice Ask and Look & guide ignore user configuration, so configured plugins and MCP tools are not loaded. Use Open in Codex when you intentionally need them.",
                     systemImage: "checkmark.shield"
                 )
                 .font(.caption)

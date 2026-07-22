@@ -39,10 +39,14 @@
 	<true/>
 	<key>NSHighResolutionCapable</key>
 	<true/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Codex-bangs uses the microphone only after you start a voice question, then stops when you finish, cancel, or close the notch.</string>
 	<key>NSPrefersDisplaySafeAreaCompatibilityMode</key>
 	<false/>
 	<key>NSScreenCaptureUsageDescription</key>
-	<string>Codex-bangs captures the display under your pointer only when you click Guide me, sends it through Codex for guidance, and deletes the temporary image after the response.</string>
+	<string>Codex-bangs captures the display under your pointer only when you click Look &amp; guide, sends it through Codex for guidance, and deletes the temporary image after the response.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Codex-bangs transcribes the voice question you explicitly record so you can review it before sending it to Codex.</string>
 	<key>UTExportedTypeDeclarations</key>
 	<array>
 		<dict>
