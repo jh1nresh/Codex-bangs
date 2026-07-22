@@ -7,6 +7,7 @@ enum NotchMotion {
     static let collapseMilliseconds: Int64 = 240
     static let revealDamping = 0.86
     static let hoverDwell = Duration.milliseconds(80)
+    static let hoverExitGrace = Duration.milliseconds(350)
     static var revealResponse: Double { Double(revealMilliseconds) / 1_000 }
     static var collapseSeconds: Double { Double(collapseMilliseconds) / 1_000 }
     static var revealDuration: Duration { .milliseconds(revealMilliseconds) }
@@ -29,6 +30,7 @@ final class NotchPanelController {
     private var screenObserver: NSObjectProtocol?
     private var globalMouseMonitor: Any?
     private var localEventMonitor: Any?
+    private var isPointerHoveringSilhouette = false
     private var hoverShowTask: Task<Void, Never>?
     private var hoverHideTask: Task<Void, Never>?
     private var frameSettleTask: Task<Void, Never>?
@@ -92,6 +94,7 @@ final class NotchPanelController {
         if !model.isExpanded {
             model.isNotchRevealed = false
         }
+        isPointerHoveringSilhouette = false
         panel.orderOut(nil)
     }
 
@@ -240,7 +243,7 @@ final class NotchPanelController {
 
     private func collapseIfPointerIsOutside() {
         guard panel.isVisible,
-              !panel.frame.contains(NSEvent.mouseLocation) else {
+              !isPointerHoveringSilhouette else {
             return
         }
         if model.isExpanded {
@@ -437,7 +440,7 @@ final class NotchPanelController {
     private func hideCompactIfPointerIsOutside() {
         guard !model.isExpanded,
               model.isNotchRevealed,
-              !panel.frame.contains(NSEvent.mouseLocation) else {
+              !isPointerHoveringSilhouette else {
             return
         }
         model.isNotchRevealed = false
@@ -446,6 +449,8 @@ final class NotchPanelController {
 
     private func handleHoverChanged(_ hovering: Bool) {
         guard panel.isVisible else { return }
+        let wasHovering = isPointerHoveringSilhouette
+        isPointerHoveringSilhouette = hovering
 
         hoverShowTask?.cancel()
         hoverShowTask = nil
@@ -467,7 +472,7 @@ final class NotchPanelController {
                       self.panel.isVisible,
                       !self.model.isExpanded,
                       !self.model.isNotchRevealed,
-                      self.panel.frame.contains(NSEvent.mouseLocation) else {
+                      self.isPointerHoveringSilhouette else {
                     return
                 }
                 self.updateLayout(animated: false, presentation: .compact)
@@ -478,13 +483,15 @@ final class NotchPanelController {
             return
         }
 
-        guard !model.isExpanded else { return }
+        guard wasHovering else { return }
         hoverHideTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(350))
+            try? await Task.sleep(for: NotchMotion.hoverExitGrace)
             guard !Task.isCancelled,
-                  let self,
-                  !self.model.isExpanded,
-                  !self.panel.frame.contains(NSEvent.mouseLocation) else {
+                  let self else {
+                return
+            }
+            if self.model.isExpanded {
+                self.setExpanded(false)
                 return
             }
             self.frameSettleTask?.cancel()

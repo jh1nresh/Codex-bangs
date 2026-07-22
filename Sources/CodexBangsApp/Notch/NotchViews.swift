@@ -21,14 +21,19 @@ struct NotchRootView: View {
             if hasNotch {
                 GeometryReader { proxy in
                     let visibleSize = silhouetteSize(in: proxy.size)
+                    let topCornerRadius: CGFloat = model.isNotchRevealed || model.isExpanded
+                        ? 24
+                        : 0
                     let silhouette = NotchSilhouetteShape(
                         visibleSize: visibleSize,
-                        cornerRadius: 24
+                        topCornerRadius: topCornerRadius,
+                        bottomCornerRadius: 24
                     )
                     ZStack(alignment: .top) {
                         NotchIslandBackground(
                             cornerRadius: 24,
-                            shadowRadius: model.isNotchRevealed ? 18 : 0,
+                            shadowRadius: 0,
+                            topCornerRadius: topCornerRadius,
                             visibleSize: visibleSize
                         )
                         .animation(shellAnimation, value: visibleSize)
@@ -764,25 +769,35 @@ extension AppDisplayStatus {
 
 private struct NotchSilhouetteShape: InsettableShape {
     var visibleSize: CGSize
-    var cornerRadius: CGFloat
+    var topCornerRadius: CGFloat
+    var bottomCornerRadius: CGFloat
     private var insetAmount: CGFloat = 0
 
-    init(visibleSize: CGSize, cornerRadius: CGFloat) {
+    init(
+        visibleSize: CGSize,
+        topCornerRadius: CGFloat,
+        bottomCornerRadius: CGFloat
+    ) {
         self.visibleSize = visibleSize
-        self.cornerRadius = cornerRadius
+        self.topCornerRadius = topCornerRadius
+        self.bottomCornerRadius = bottomCornerRadius
     }
 
-    var animatableData: AnimatablePair<CGFloat, AnimatablePair<CGFloat, CGFloat>> {
+    var animatableData: AnimatablePair<
+        AnimatablePair<CGFloat, CGFloat>,
+        AnimatablePair<CGFloat, CGFloat>
+    > {
         get {
             AnimatablePair(
-                visibleSize.width,
-                AnimatablePair(visibleSize.height, cornerRadius)
+                AnimatablePair(visibleSize.width, visibleSize.height),
+                AnimatablePair(topCornerRadius, bottomCornerRadius)
             )
         }
         set {
-            visibleSize.width = newValue.first
-            visibleSize.height = newValue.second.first
-            cornerRadius = newValue.second.second
+            visibleSize.width = newValue.first.first
+            visibleSize.height = newValue.first.second
+            topCornerRadius = newValue.second.first
+            bottomCornerRadius = newValue.second.second
         }
     }
 
@@ -793,8 +808,12 @@ private struct NotchSilhouetteShape: InsettableShape {
         let height = min(max(0, visibleSize.height - insetAmount * 2), availableHeight)
         guard width > 0, height > 0 else { return Path() }
 
-        let radius = min(
-            max(0, cornerRadius - insetAmount),
+        let topRadius = min(
+            max(0, topCornerRadius - insetAmount),
+            min(width, height) / 2
+        )
+        let bottomRadius = min(
+            max(0, bottomCornerRadius - insetAmount),
             min(width, height) / 2
         )
         let silhouetteRect = CGRect(
@@ -804,10 +823,10 @@ private struct NotchSilhouetteShape: InsettableShape {
             height: height
         )
         return UnevenRoundedRectangle(
-            topLeadingRadius: 0,
-            bottomLeadingRadius: radius,
-            bottomTrailingRadius: radius,
-            topTrailingRadius: 0,
+            topLeadingRadius: topRadius,
+            bottomLeadingRadius: bottomRadius,
+            bottomTrailingRadius: bottomRadius,
+            topTrailingRadius: topRadius,
             style: .continuous
         )
         .path(in: silhouetteRect)
@@ -824,6 +843,7 @@ private struct NotchIslandBackground: View {
     let cornerRadius: CGFloat
     let shadowRadius: CGFloat
     var topAttached = true
+    var topCornerRadius: CGFloat = 0
     var visibleSize: CGSize? = nil
 
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
@@ -834,7 +854,8 @@ private struct NotchIslandBackground: View {
             surface(
                 NotchSilhouetteShape(
                     visibleSize: visibleSize,
-                    cornerRadius: cornerRadius
+                    topCornerRadius: topCornerRadius,
+                    bottomCornerRadius: cornerRadius
                 )
             )
         } else if topAttached {
@@ -895,9 +916,11 @@ private struct NotchIslandBackground: View {
             )
         }
         .shadow(
-            color: .black.opacity(reduceTransparency ? 0.30 : 0.24),
+            color: shadowRadius > 0
+                ? .black.opacity(reduceTransparency ? 0.30 : 0.24)
+                : .clear,
             radius: shadowRadius,
-            y: 7
+            y: shadowRadius > 0 ? 7 : 0
         )
     }
 
