@@ -37,6 +37,7 @@ final class NotchPanelController {
     private var hoverShowTask: Task<Void, Never>?
     private var hoverHideTask: Task<Void, Never>?
     private var frameSettleTask: Task<Void, Never>?
+    private var cursorPollTask: Task<Void, Never>?
     private var renderedCenterGapWidth: CGFloat?
     private var renderedNotchSize: CGSize?
     private var renderedHasNotch: Bool?
@@ -82,6 +83,7 @@ final class NotchPanelController {
         } else {
             panel.orderFrontRegardless()
         }
+        startCursorPolling()
     }
 
     func hide() {
@@ -91,6 +93,8 @@ final class NotchPanelController {
         hoverHideTask = nil
         frameSettleTask?.cancel()
         frameSettleTask = nil
+        cursorPollTask?.cancel()
+        cursorPollTask = nil
         model.requestVoiceCancellation()
         model.setVoiceSessionActive(false)
         if !model.isExpanded {
@@ -172,6 +176,8 @@ final class NotchPanelController {
         hoverHideTask = nil
         frameSettleTask?.cancel()
         frameSettleTask = nil
+        cursorPollTask?.cancel()
+        cursorPollTask = nil
         model.requestVoiceCancellation()
         model.setVoiceSessionActive(false)
         panel.orderOut(nil)
@@ -505,6 +511,43 @@ final class NotchPanelController {
             self.settleToHiddenAfterMorph()
             self.hoverHideTask = nil
         }
+    }
+
+    private func startCursorPolling() {
+        guard cursorPollTask == nil else { return }
+        cursorPollTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(80))
+                guard !Task.isCancelled,
+                      let self,
+                      self.panel.isVisible else {
+                    continue
+                }
+
+                let isHovering = self.isPointerInRevealZone()
+                if isHovering != self.isPointerHoveringSilhouette {
+                    self.handleHoverChanged(isHovering)
+                }
+            }
+        }
+    }
+
+    private func isPointerInRevealZone() -> Bool {
+        if model.isExpanded || model.isNotchRevealed {
+            return panel.frame
+                .insetBy(dx: -10, dy: -10)
+                .contains(NSEvent.mouseLocation)
+        }
+
+        guard let screen = targetScreen(),
+              let cameraHousing = cameraHousing(for: screen) else {
+            return panel.frame
+                .insetBy(dx: -10, dy: -10)
+                .contains(NSEvent.mouseLocation)
+        }
+        return cameraHousing
+            .insetBy(dx: -14, dy: -8)
+            .contains(NSEvent.mouseLocation)
     }
 
     private func openSettings() {
