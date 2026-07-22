@@ -133,12 +133,12 @@ final class VoiceInputService {
             onBus: 0,
             bufferSize: 1_024,
             format: recordingFormat
-        ) { buffer, _ in
+        ) { @Sendable buffer, _ in
             sink.append(buffer)
         }
         hasInstalledAudioTap = true
 
-        recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
+        recognitionTask = recognizer.recognitionTask(with: request) { @Sendable [weak self] result, error in
             let recognizedText = result?.bestTranscription.formattedString
             let isFinal = result?.isFinal == true
             let didFail = error != nil
@@ -299,7 +299,7 @@ final class VoiceInputService {
             return .restricted
         case .notDetermined:
             return await withCheckedContinuation { continuation in
-                SFSpeechRecognizer.requestAuthorization { status in
+                SFSpeechRecognizer.requestAuthorization { @Sendable status in
                     continuation.resume(returning: Self.permissionResult(for: status))
                 }
             }
