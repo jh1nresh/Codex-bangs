@@ -6,6 +6,9 @@ enum NotchMotion {
     static let revealMilliseconds: Int64 = 340
     static let collapseMilliseconds: Int64 = 240
     static let revealDamping = 0.86
+    static let contentRevealDelaySeconds = 0.10
+    static let contentRevealSeconds = 0.18
+    static let contentHideSeconds = 0.09
     static let hoverDwell = Duration.milliseconds(80)
     static let hoverExitGrace = Duration.milliseconds(350)
     static var revealResponse: Double { Double(revealMilliseconds) / 1_000 }

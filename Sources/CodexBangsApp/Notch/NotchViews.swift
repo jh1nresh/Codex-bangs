@@ -21,20 +21,16 @@ struct NotchRootView: View {
             if hasNotch {
                 GeometryReader { proxy in
                     let visibleSize = silhouetteSize(in: proxy.size)
-                    let topCornerRadius: CGFloat = model.isNotchRevealed || model.isExpanded
-                        ? 24
-                        : 0
                     let silhouette = NotchSilhouetteShape(
                         visibleSize: visibleSize,
-                        topCornerRadius: topCornerRadius,
-                        bottomCornerRadius: 24
+                        topShoulder: topShoulder,
+                        bottomCornerRadius: bottomCornerRadius
                     )
                     ZStack(alignment: .top) {
                         NotchIslandBackground(
                             cornerRadius: 24,
                             shadowRadius: 0,
-                            topCornerRadius: topCornerRadius,
-                            visibleSize: visibleSize
+                            silhouette: silhouette
                         )
                         .animation(shellAnimation, value: visibleSize)
                         .allowsHitTesting(false)
@@ -46,6 +42,7 @@ struct NotchRootView: View {
                                 .animation(shellAnimation, value: visibleSize)
                             }
                     }
+                    // Keep hover on the target shell while the visible path catches up.
                     .contentShape(silhouette)
                     .onHover(perform: onHoverChanged)
                 }
@@ -122,11 +119,28 @@ struct NotchRootView: View {
         return .asymmetric(
             insertion: .offset(y: -8)
                 .combined(with: .opacity)
-                .animation(.easeOut(duration: 0.18).delay(0.08)),
+                .animation(
+                    .easeOut(duration: NotchMotion.contentRevealSeconds)
+                        .delay(NotchMotion.contentRevealDelaySeconds)
+                ),
             removal: .offset(y: -4)
                 .combined(with: .opacity)
-                .animation(.easeOut(duration: 0.10))
+                .animation(.easeOut(duration: NotchMotion.contentHideSeconds))
         )
+    }
+
+    private var bottomCornerRadius: CGFloat {
+        if model.isExpanded {
+            return 24
+        }
+        if model.isNotchRevealed {
+            return 20
+        }
+        return 12
+    }
+
+    private var topShoulder: CGFloat {
+        model.isNotchRevealed || model.isExpanded ? 8 : 6
     }
 
     private func silhouetteSize(in containerSize: CGSize) -> CGSize {
@@ -769,17 +783,17 @@ extension AppDisplayStatus {
 
 private struct NotchSilhouetteShape: InsettableShape {
     var visibleSize: CGSize
-    var topCornerRadius: CGFloat
+    var topShoulder: CGFloat
     var bottomCornerRadius: CGFloat
     private var insetAmount: CGFloat = 0
 
     init(
         visibleSize: CGSize,
-        topCornerRadius: CGFloat,
+        topShoulder: CGFloat,
         bottomCornerRadius: CGFloat
     ) {
         self.visibleSize = visibleSize
-        self.topCornerRadius = topCornerRadius
+        self.topShoulder = topShoulder
         self.bottomCornerRadius = bottomCornerRadius
     }
 
@@ -790,13 +804,13 @@ private struct NotchSilhouetteShape: InsettableShape {
         get {
             AnimatablePair(
                 AnimatablePair(visibleSize.width, visibleSize.height),
-                AnimatablePair(topCornerRadius, bottomCornerRadius)
+                AnimatablePair(topShoulder, bottomCornerRadius)
             )
         }
         set {
             visibleSize.width = newValue.first.first
             visibleSize.height = newValue.first.second
-            topCornerRadius = newValue.second.first
+            topShoulder = newValue.second.first
             bottomCornerRadius = newValue.second.second
         }
     }
@@ -808,13 +822,13 @@ private struct NotchSilhouetteShape: InsettableShape {
         let height = min(max(0, visibleSize.height - insetAmount * 2), availableHeight)
         guard width > 0, height > 0 else { return Path() }
 
-        let topRadius = min(
-            max(0, topCornerRadius - insetAmount),
-            min(width, height) / 2
+        let shoulder = min(
+            max(0, topShoulder),
+            min(width / 2, height)
         )
         let bottomRadius = min(
             max(0, bottomCornerRadius - insetAmount),
-            min(width, height) / 2
+            min(max(0, width - shoulder * 2), max(0, height - shoulder)) / 2
         )
         let silhouetteRect = CGRect(
             x: rect.midX - width / 2,
@@ -822,14 +836,56 @@ private struct NotchSilhouetteShape: InsettableShape {
             width: width,
             height: height
         )
-        return UnevenRoundedRectangle(
-            topLeadingRadius: topRadius,
-            bottomLeadingRadius: bottomRadius,
-            bottomTrailingRadius: bottomRadius,
-            topTrailingRadius: topRadius,
-            style: .continuous
+        let left = silhouetteRect.minX
+        let right = silhouetteRect.maxX
+        let top = silhouetteRect.minY
+        let bottom = silhouetteRect.maxY
+        let bodyLeft = left + shoulder
+        let bodyRight = right - shoulder
+        let curve = 0.552_284_8
+
+        // The screen clips the top edge; these small reverse shoulders keep the
+        // attached shell from reading as a four-corner rounded rectangle.
+        var path = Path()
+        path.move(to: CGPoint(x: left, y: top))
+        path.addLine(to: CGPoint(x: right, y: top))
+        path.addCurve(
+            to: CGPoint(x: bodyRight, y: top + shoulder),
+            control1: CGPoint(x: right - curve * shoulder, y: top),
+            control2: CGPoint(x: bodyRight, y: top + shoulder - curve * shoulder)
         )
-        .path(in: silhouetteRect)
+        path.addLine(to: CGPoint(x: bodyRight, y: bottom - bottomRadius))
+        path.addCurve(
+            to: CGPoint(x: bodyRight - bottomRadius, y: bottom),
+            control1: CGPoint(
+                x: bodyRight,
+                y: bottom - bottomRadius + curve * bottomRadius
+            ),
+            control2: CGPoint(
+                x: bodyRight - bottomRadius + curve * bottomRadius,
+                y: bottom
+            )
+        )
+        path.addLine(to: CGPoint(x: bodyLeft + bottomRadius, y: bottom))
+        path.addCurve(
+            to: CGPoint(x: bodyLeft, y: bottom - bottomRadius),
+            control1: CGPoint(
+                x: bodyLeft + bottomRadius - curve * bottomRadius,
+                y: bottom
+            ),
+            control2: CGPoint(
+                x: bodyLeft,
+                y: bottom - bottomRadius + curve * bottomRadius
+            )
+        )
+        path.addLine(to: CGPoint(x: bodyLeft, y: top + shoulder))
+        path.addCurve(
+            to: CGPoint(x: left, y: top),
+            control1: CGPoint(x: bodyLeft, y: top + shoulder - curve * shoulder),
+            control2: CGPoint(x: left + curve * shoulder, y: top)
+        )
+        path.closeSubpath()
+        return path
     }
 
     func inset(by amount: CGFloat) -> NotchSilhouetteShape {
@@ -843,21 +899,14 @@ private struct NotchIslandBackground: View {
     let cornerRadius: CGFloat
     let shadowRadius: CGFloat
     var topAttached = true
-    var topCornerRadius: CGFloat = 0
-    var visibleSize: CGSize? = nil
+    var silhouette: NotchSilhouetteShape? = nil
 
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     @ViewBuilder
     var body: some View {
-        if topAttached, let visibleSize {
-            surface(
-                NotchSilhouetteShape(
-                    visibleSize: visibleSize,
-                    topCornerRadius: topCornerRadius,
-                    bottomCornerRadius: cornerRadius
-                )
-            )
+        if let silhouette {
+            surface(silhouette)
         } else if topAttached {
             surface(
                 UnevenRoundedRectangle(
