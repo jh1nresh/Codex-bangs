@@ -6,8 +6,8 @@ Date: 2026-07-22
 
 HeyClicky is a general screen-aware voice and agent companion. Codex-bangs stays
 Codex-specific, but now adopts a bounded assistant layer on top of telemetry:
-read-only tasks, a global text shortcut, explicit one-shot screen guidance, and
-agent-pet profiles. It still does not continuously watch, listen, click, type,
+read-only tasks, an explicit push-to-talk shortcut, one-shot screen guidance,
+and agent-pet profiles. It still does not continuously watch, listen, click, type,
 approve tools, or act in other apps.
 
 HeyClicky's official pages say screen capture occurs on an explicit hotkey and
@@ -25,8 +25,8 @@ open-source build are historical evidence only.
 | Contextual reactions | Core: truthful status labels plus deterministic semantic pet animations; no model call and no prompt access. |
 | Menu bar and non-activating panel | Core: matches the existing AppKit boundary. |
 | Pet interaction | Core: single-click wave, double-click jump, and panel-local pointer gaze; no global tracking. |
-| Talk to pet | Core: `Ask` runs a persisted local Codex task with a read-only filesystem sandbox; `Open in Codex` remains the editable/approval path. |
-| Global shortcut | Core: `Control-Option-Space` uses the macOS Carbon hot-key API and needs no Accessibility permission. |
+| Talk to pet | Core: a user-started recording is transcribed on-device and reviewed before `Voice Ask` runs a persisted local Codex task with a read-only filesystem sandbox; `Open in Codex` remains the editable/approval path. |
+| Global shortcut | Core: `Control-Option-Space` uses the macOS Carbon hot-key API to open the panel and start recording; it needs no Accessibility permission. |
 | Screen guidance | Core: explicit one-shot capture only, excludes Codex-bangs, caps resolution, uses an ephemeral Codex task, then deletes the private local image. |
 | Skills and agents | Core: read-only skill-name discovery, per-role skill selection, and Builder/Reviewer/Guide profiles with separately assigned pets. |
 | Plugins | Core: display configured plugin identifiers; installation, removal, enablement, and permissions stay in Codex. |
@@ -36,13 +36,13 @@ open-source build are historical evidence only.
 | Capability | Safe form |
 | --- | --- |
 | Return to an existing Codex task | Navigate through a documented task link/API if one becomes available; never guess an internal thread route. |
-| Spoken status | Optional macOS system TTS with fixed templates; no microphone and no cloud. |
+| Spoken status | Optional macOS system TTS with fixed templates; separate from user-started voice questions. |
 | Character/personality packs | Continue the local v2 pet-package path without expanding data permissions. |
 | Approval-aware editable tasks | Requires a long-lived controller for approvals, user input, cancellation, and recovery. Until then editable work opens in Codex. |
 
 ## Reject from this product
 
-- push-to-talk, background dictation, and always-listening voice Q&A;
+- background dictation, wake words, and always-listening voice Q&A;
 - continuous screenshots, screen-content memory, and background observation;
 - cross-app arrows, automated clicks, or Accessibility-driven actions;
 - background agents that build, research, email, or approve on the user's behalf.
@@ -50,9 +50,11 @@ open-source build are historical evidence only.
   cancellation, and recovery controller.
 
 Those rejected features add standing authority or ambient collection. The
-implemented assistant path is deliberately user-triggered and bounded: Codex
-receives the entered text, the active role and selected skill invocation, plus
-one attached screenshot only for `Guide me`. The filesystem is read-only, screen
+implemented assistant path is deliberately user-triggered and bounded: the app
+records only after an explicit action, requires on-device recognition, stops on
+finish, cancel, timeout, or collapse, and lets the user review the transcript.
+Codex receives that transcript, the active role and selected skill invocation,
+plus one attached screenshot only for `Look & guide`. The filesystem is read-only, screen
 guidance is ephemeral, and Codex-bangs exposes Stop but no approval button.
 Direct tasks use `--ignore-user-config`, so configured plugins and MCP servers are
 not loaded; `Open in Codex` remains the explicit path for using them.
@@ -75,10 +77,10 @@ a compatibility risk rather than a task-execution contract. Before opening,
 Codex-bangs binds the handoff to a valid app signed by OpenAI's current team and
 registered with the expected Codex bundle identifier.
 
-Direct Ask uses the supported local `codex exec` CLI contract instead. The
+Direct Voice Ask uses the supported local `codex exec` CLI contract instead. The
 prompt is written on stdin rather than command-line arguments, user configuration
 is ignored, output parsing is bounded to final JSONL agent messages, cancellation
-terminates the child, and stderr is never surfaced. Guide me adds `--ephemeral -i
+terminates the child, and stderr is never surfaced. Look & guide adds `--ephemeral -i
 <private-png>` and removes the UUID-scoped directory on every terminal path.
 
 ## Current primary sources

@@ -37,7 +37,6 @@ final class NotchPanelController {
     private var hoverShowTask: Task<Void, Never>?
     private var hoverHideTask: Task<Void, Never>?
     private var frameSettleTask: Task<Void, Never>?
-    private var focusTask: Task<Void, Never>?
     private var renderedCenterGapWidth: CGFloat?
     private var renderedNotchSize: CGSize?
     private var renderedHasNotch: Bool?
@@ -92,8 +91,8 @@ final class NotchPanelController {
         hoverHideTask = nil
         frameSettleTask?.cancel()
         frameSettleTask = nil
-        focusTask?.cancel()
-        focusTask = nil
+        model.requestVoiceCancellation()
+        model.setVoiceSessionActive(false)
         if !model.isExpanded {
             model.isNotchRevealed = false
         }
@@ -114,8 +113,8 @@ final class NotchPanelController {
         frameSettleTask?.cancel()
         frameSettleTask = nil
         if !expanded {
-            focusTask?.cancel()
-            focusTask = nil
+            model.requestVoiceCancellation()
+            model.setVoiceSessionActive(false)
         }
         panel.permitsKey = expanded
         panel.styleMask = expanded ? [.borderless] : [.borderless, .nonactivatingPanel]
@@ -151,8 +150,7 @@ final class NotchPanelController {
         show()
         setExpanded(true)
         panel.makeKeyAndOrderFront(nil)
-        model.requestTaskFocus()
-        scheduleTaskFieldFocus()
+        model.requestVoiceInput()
     }
 
     func tearDown() {
@@ -174,8 +172,8 @@ final class NotchPanelController {
         hoverHideTask = nil
         frameSettleTask?.cancel()
         frameSettleTask = nil
-        focusTask?.cancel()
-        focusTask = nil
+        model.requestVoiceCancellation()
+        model.setVoiceSessionActive(false)
         panel.orderOut(nil)
     }
 
@@ -493,6 +491,10 @@ final class NotchPanelController {
                   let self else {
                 return
             }
+            while self.model.isVoiceSessionActive {
+                try? await Task.sleep(for: .milliseconds(200))
+                guard !Task.isCancelled else { return }
+            }
             if self.model.isExpanded {
                 self.setExpanded(false)
                 return
@@ -516,27 +518,6 @@ final class NotchPanelController {
         }
     }
 
-    private func scheduleTaskFieldFocus() {
-        focusTask?.cancel()
-        focusTask = Task { [weak self] in
-            for _ in 0..<5 {
-                guard !Task.isCancelled, let self else { return }
-                if self.focusTaskField() {
-                    self.focusTask = nil
-                    return
-                }
-                try? await Task.sleep(for: .milliseconds(75))
-            }
-            self?.focusTask = nil
-        }
-    }
-
-    private func focusTaskField() -> Bool {
-        guard let field = hostingView.firstEditableTextInput() else {
-            return false
-        }
-        return panel.makeFirstResponder(field)
-    }
 }
 
 @MainActor
@@ -560,39 +541,5 @@ private final class NotchPanel: NSPanel {
 private final class FirstMouseHostingView<Content: View>: NSHostingView<Content> {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
         true
-    }
-
-    func firstEditableTextInput() -> NSResponder? {
-        firstEditableTextField(in: self)
-            ?? firstEditableTextView(in: self)
-    }
-
-    private func firstEditableTextField(in view: NSView) -> NSTextField? {
-        if let field = view as? NSTextField,
-           field.isEditable,
-           field.isEnabled {
-            return field
-        }
-
-        for subview in view.subviews {
-            if let field = firstEditableTextField(in: subview) {
-                return field
-            }
-        }
-        return nil
-    }
-
-    private func firstEditableTextView(in view: NSView) -> NSTextView? {
-        if let textView = view as? NSTextView,
-           textView.isEditable {
-            return textView
-        }
-
-        for subview in view.subviews {
-            if let textView = firstEditableTextView(in: subview) {
-                return textView
-            }
-        }
-        return nil
     }
 }
