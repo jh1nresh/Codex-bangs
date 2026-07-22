@@ -502,6 +502,7 @@ private struct ExpandedNotchView: View {
         .padding(.horizontal, 14)
         .padding(.top, hasNotch ? 7 : 10)
         .padding(.bottom, 12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(
             NotchIslandBackground(
                 cornerRadius: 24,
